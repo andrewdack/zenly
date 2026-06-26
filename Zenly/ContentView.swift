@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  Zenly
-//
-//  Created by Andrew Hu on 6/26/26.
-//
-
 import SwiftUI
 
 struct ContentView: View {
@@ -19,7 +12,6 @@ struct ContentView: View {
     }
 }
 
-/// Shown when no session is active — the user starts one by texting the agent.
 struct WaitingView: View {
     var body: some View {
         VStack(spacing: 16) {
@@ -28,7 +20,7 @@ struct WaitingView: View {
                 .foregroundStyle(.tint)
             Text("Zenly")
                 .font(.largeTitle.bold())
-            Text("Text the Zenly number to start a focus session.")
+            Text("Text the Zenly agent to start a focus session.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -37,7 +29,6 @@ struct WaitingView: View {
     }
 }
 
-/// Minimal active-session screen (expanded in Phase 4: timer + status indicator).
 struct ActiveSessionView: View {
     let session: FocusSession
     @Environment(SessionStore.self) private var store
@@ -53,8 +44,13 @@ struct ActiveSessionView: View {
                 .foregroundStyle(store.onTask ? .green : .orange)
                 .font(.headline)
 
-            Text("Ends \(session.endsAt.formatted(date: .omitted, time: .shortened))")
-                .foregroundStyle(.secondary)
+            if let endsAt = session.endsAt {
+                Text("Ends \(endsAt.formatted(date: .omitted, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("No time limit")
+                    .foregroundStyle(.secondary)
+            }
 
             Button("End session", role: .destructive) { store.end() }
                 .buttonStyle(.borderedProminent)
@@ -67,8 +63,14 @@ struct ActiveSessionView: View {
     ContentView().environment(SessionStore())
 }
 
-#Preview("Active") {
+#Preview("Active – timed") {
     let store = SessionStore()
     store.start(task: "History essay", durationMinutes: 45)
-    return ContentView().environment(store)
+    ContentView().environment(store)
+}
+
+#Preview("Active – indefinite") {
+    let store = SessionStore()
+    store.start(task: "Deep work")
+    ContentView().environment(store)
 }

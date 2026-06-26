@@ -19,11 +19,12 @@ function parseSessionBlock(text: string): ParseResult {
   let session: ParsedSession | null = null;
   try {
     const raw = JSON.parse(match[1].trim()) as Record<string, unknown>;
-    if (raw.task && raw.duration_minutes && raw.contact_phone) {
+    if (raw.task) {
       session = {
         task: String(raw.task),
-        durationMinutes: parseInt(String(raw.duration_minutes), 10),
-        contactPhone: String(raw.contact_phone),
+        durationMinutes: raw.duration_minutes != null
+          ? parseInt(String(raw.duration_minutes), 10)
+          : null,
       };
     }
   } catch (err) {

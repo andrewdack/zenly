@@ -1,10 +1,16 @@
 # Zenly
 
-Intent-aware distraction blocker with a conversational iMessage agent. A user iMessages the
-Mac running the backend, an LLM agent collects their task/duration/accountability-contact and
-starts a focus session in the iOS app. The app captures screenshots (ReplayKit), a backend
-vision model judges "on task" vs "off task", and escalation goes: local notification →
-ManagedSettings shield → funny iMessage to the accountability contact.
+Intent-aware distraction blocker with a conversational iMessage agent.
+
+**User flow:**
+1. First launch: user configures intervention level (nudge / block / snitch) and accountability
+   contact in the app. This is a one-time setup.
+2. To start a session: user iMessages the Mac running the backend. The agent collects the task
+   and an optional duration (indefinite is fine). Agent replies with a deep link.
+3. User taps the deep link → iOS app starts the focus session.
+4. App captures screenshots (ReplayKit), backend vision model judges "on task" vs "off task".
+5. Escalation follows the configured level: local notification → ManagedSettings shield →
+   funny iMessage to the accountability contact (contact phone lives in the app, not the agent).
 
 Hackathon project. macOS, Xcode 26.6, Node 24, iPhone target.
 
@@ -27,11 +33,11 @@ backend/                 # Node.js + Express + TypeScript: iMessage agent, visio
 | 1 | Xcode scaffold: 4 targets, entitlements, App Group, URL scheme | ✅ done, builds clean |
 | 2 | Node backend scaffold: Express + provider-agnostic LLM + routes + iMessage watcher | ✅ done, smoke-tested |
 | 3 | iMessage agent conversation loop (stateful, `<session>` parsing, iMessage reply) | ◐ built in `backend/src/agent/handler.ts`; activates when an LLM key is set |
-| 4 | SwiftUI: waiting screen, active-session timer + status, stats | ◐ waiting + basic active screen exist (`ContentView.swift`); timer/stats TODO |
+| 4 | SwiftUI: settings screen (intervention level + contact), waiting screen, active-session timer | ◐ basic active screen exists; settings UI + timer TODO |
 | 5 | ReplayKit broadcast: frame → JPEG → App Group container | ☐ todo |
 | 6 | App polling loop: read frames → POST /judge → nudge/escalate | ☐ todo |
 | 7 | DeviceActivityMonitor: read shield instruction → ManagedSettingsStore | ☐ todo (PAID — Family Controls) |
-| 8 | Snitch escalation → POST /snitch → iMessage to accountability contact | ◐ `/snitch` route done; app trigger todo |
+| 8 | Snitch escalation → POST /snitch → iMessage to accountability contact | ◐ `/snitch` route done; app passes contactPhone from settings; trigger todo |
 | 9 | Demo polish: shield text, summary message, stats dashboard | ☐ todo |
 
 ## iOS project facts
@@ -40,6 +46,9 @@ backend/                 # Node.js + Express + TypeScript: iMessage agent, visio
   unique — likely change to `com.andrewhu.zenly`. Extensions inherit the prefix.
 - **App Group**: `group.com.andrewh.zenly` — declared in all four targets' `.entitlements`.
   The constant lives in `Zenly/SessionStore.swift` (`AppGroup.identifier`).
+- **User settings** live in `SessionStore`: `interventionLevel` (nudge/block/snitch enum) and
+  `contactPhone` (string). Configured in the app on first launch; passed to `/snitch` by the app
+  — the iMessage agent never collects the contact phone.
 - **URL scheme**: `zenly://`. Registered via `Zenly/Info.plist` (`CFBundleURLTypes`) merged with
   the generated Info.plist. Deep link: `zenly://session/start?task=<enc>&duration=<min>`.
   Handled in `ZenlyApp.swift` (`onOpenURL`) → `SessionStore.handle(url:)`.
@@ -112,10 +121,11 @@ src/routes/session.ts     # POST /session/start, GET /session/:phone
 - `chat({ system, messages, maxTokens }) -> Promise<string>`
 - `vision({ system, prompt, imageBase64, mediaType, maxTokens }) -> Promise<string>`
 
-**iMessage flow**: `sdk.startWatching({ onDirectMessage })` in `index.ts` replaces the old Twilio
-webhook. Each incoming DM calls `handleMessage(from, text)` (same agent logic) and sends the reply
-with `sdk.send({ to: chatId, text })`. The Express server starts independently — watcher failure
-(e.g. no Full Disk Access) is non-fatal and logged.
+**iMessage flow**: `sdk.startWatching({ onDirectMessage })` in `index.ts` starts the agent loop.
+Each incoming DM calls `handleMessage(from, text)` and replies via `sdk.send({ to: chatId, text })`.
+The agent collects **task** (required) and **duration** (optional — indefinite is fine). It does NOT
+collect the accountability contact; that lives in the iOS app's settings. The Express server starts
+independently — watcher failure (e.g. no Full Disk Access) is non-fatal and logged.
 
 **Degraded mode** (no LLM key): server boots and every route responds — agent echoes messages,
 `/judge` returns `on_task:true`, `/snitch` uses a canned message.
@@ -137,7 +147,7 @@ npm run dev              # tsx watch src/index.ts
 | GET  | `/`               | health + config status |
 | POST | `/judge`          | `{ task, imageBase64, mediaType? }` → `{ on_task, confidence, reason }` |
 | POST | `/snitch`         | `{ task, contactPhone, screenContent, userPhone? }` → iMessage to contact |
-| POST | `/session/start`  | `{ userPhone, task, durationMinutes, contactPhone }` → session + deeplink |
+| POST | `/session/start`  | `{ userPhone, task, durationMinutes? }` → session + deeplink |
 | GET  | `/session/:phone` | polling handoff for the app |
 
 Note: there is no `/webhook/sms` route. Inbound messages arrive via the iMessage watcher, not HTTP.

@@ -20,9 +20,9 @@ export function appendTurn(phone: string, role: 'user' | 'assistant', content: s
   get(phone).history.push({ role, content });
 }
 
-export function startSession(phone: string, { task, durationMinutes, contactPhone }: ParsedSession): Session {
+export function startSession(phone: string, { task, durationMinutes }: ParsedSession): Session {
   const state = get(phone);
-  state.session = { task, durationMinutes, contactPhone, startedAt: Date.now() };
+  state.session = { task, durationMinutes, startedAt: Date.now() };
   state.stats = { nudges: 0, snitches: 0, lastOnTask: true };
   return state.session;
 }
@@ -43,9 +43,11 @@ export function statsSummary(phone: string): string {
   const state = get(phone);
   if (!state.session) return "You don't have an active session right now.";
   const elapsedMin = Math.floor((Date.now() - state.session.startedAt) / 60000);
-  const remaining = Math.max(0, state.session.durationMinutes - elapsedMin);
+  const timeStr = state.session.durationMinutes != null
+    ? `~${Math.max(0, state.session.durationMinutes - elapsedMin)} min left`
+    : 'no time limit';
   return (
-    `Task: ${state.session.task}. ${elapsedMin} min in, ~${remaining} min left. ` +
+    `Task: ${state.session.task}. ${elapsedMin} min in, ${timeStr}. ` +
     `Nudges: ${state.stats.nudges}, snitches sent: ${state.stats.snitches}.`
   );
 }

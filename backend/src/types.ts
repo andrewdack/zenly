@@ -25,8 +25,7 @@ export interface LLMProvider {
 
 export interface Session {
   task: string;
-  durationMinutes: number;
-  contactPhone: string | null;
+  durationMinutes: number | null; // null = indefinite
   startedAt: number;
 }
 
@@ -45,8 +44,7 @@ export interface PhoneState {
 
 export interface ParsedSession {
   task: string;
-  durationMinutes: number;
-  contactPhone: string | null;
+  durationMinutes: number | null; // null = indefinite
 }
 
 export interface JudgeVerdict {

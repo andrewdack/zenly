@@ -1,45 +1,45 @@
-//
-//  SessionStore.swift
-//  Zenly
-//
-//  Holds the active focus session. Populated from the `zenly://` deep link
-//  the SMS agent texts the user. Shared App Group ID lives here so every
-//  target references one constant.
-//
-
 import Foundation
 import Observation
 
 enum AppGroup {
-    /// Must match the App Group in every target's .entitlements file.
     static let identifier = "group.com.andrewh.zenly"
-
-    static var container: UserDefaults? {
-        UserDefaults(suiteName: identifier)
-    }
+    static var container: UserDefaults? { UserDefaults(suiteName: identifier) }
 }
 
-/// A focus session as configured by the conversational SMS agent.
+enum InterventionLevel: String, CaseIterable, Identifiable {
+    case nudge  = "Nudge"
+    case block  = "Block"
+    case snitch = "Snitch"
+    var id: String { rawValue }
+}
+
 struct FocusSession: Equatable {
     var task: String
-    var durationMinutes: Int
+    var durationMinutes: Int?   // nil = indefinite
     var startedAt: Date
 
-    var endsAt: Date { startedAt.addingTimeInterval(TimeInterval(durationMinutes * 60)) }
-    var isActive: Bool { Date() < endsAt }
+    var endsAt: Date? {
+        guard let d = durationMinutes else { return nil }
+        return startedAt.addingTimeInterval(TimeInterval(d * 60))
+    }
+
+    var isActive: Bool {
+        guard let end = endsAt else { return true }
+        return Date() < end
+    }
 }
 
 @Observable
 final class SessionStore {
     var session: FocusSession?
-
-    /// Live on-/off-task verdict from the vision judge (Phase 6).
     var onTask: Bool = true
     var nudgeCount: Int = 0
     var snitchCount: Int = 0
 
-    /// Parse `zenly://session/start?task=...&duration=...` and begin a session.
-    /// Returns true if the URL was a recognized Zenly deep link.
+    // Persistent user settings (configured in the app before texting the agent).
+    var interventionLevel: InterventionLevel = .nudge
+    var contactPhone: String = ""
+
     @discardableResult
     func handle(url: URL) -> Bool {
         guard url.scheme == "zenly",
@@ -50,20 +50,18 @@ final class SessionStore {
 
         let items = components.queryItems ?? []
         let task = items.first(where: { $0.name == "task" })?.value ?? "Focus session"
-        let duration = Int(items.first(where: { $0.name == "duration" })?.value ?? "") ?? 25
+        let duration = items.first(where: { $0.name == "duration" })?.value.flatMap { Int($0) }
 
         start(task: task, durationMinutes: duration)
         return true
     }
 
-    func start(task: String, durationMinutes: Int) {
+    func start(task: String, durationMinutes: Int? = nil) {
         session = FocusSession(task: task, durationMinutes: durationMinutes, startedAt: Date())
         onTask = true
         nudgeCount = 0
         snitchCount = 0
     }
 
-    func end() {
-        session = nil
-    }
+    func end() { session = nil }
 }
