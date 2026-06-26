@@ -1,0 +1,18 @@
+{
+  "name": "zenly-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zenly backend: SMS agent, vision judge, and snitch. Provider-agnostic LLM layer (Claude or OpenAI).",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "openai": "^4.77.0",
+    "twilio": "^5.4.0"
+  }
+}

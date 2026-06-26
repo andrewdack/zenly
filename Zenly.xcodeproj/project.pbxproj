@@ -6,6 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		2842C6492FEF2BD100AE86C6 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2842C6482FEF2BD100AE86C6 /* ReplayKit.framework */; };
+		2842C6532FEF2BD100AE86C6 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2842C6482FEF2BD100AE86C6 /* ReplayKit.framework */; };
+		2842C6552FEF2BD100AE86C6 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2842C6542FEF2BD100AE86C6 /* UIKit.framework */; };
+		2842C65C2FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2842C6522FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2842C65F2FEF2BD100AE86C6 /* ZenlyBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2842C6462FEF2BD100AE86C6 /* ZenlyBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2842C66F2FEF2BF000AE86C6 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2842C66E2FEF2BF000AE86C6 /* DeviceActivity.framework */; };
+		2842C6772FEF2BF000AE86C6 /* ZenlyActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2842C66D2FEF2BF000AE86C6 /* ZenlyActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		2842C6262FEF2A7F00AE86C6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,17 +31,94 @@
 			remoteGlobalIDString = 2842C6172FEF2A7D00AE86C6;
 			remoteInfo = Zenly;
 		};
+		2842C65A2FEF2BD100AE86C6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2842C6102FEF2A7D00AE86C6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2842C6512FEF2BD100AE86C6;
+			remoteInfo = ZenlyBroadcastSetupUI;
+		};
+		2842C65D2FEF2BD100AE86C6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2842C6102FEF2A7D00AE86C6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2842C6452FEF2BD100AE86C6;
+			remoteInfo = ZenlyBroadcast;
+		};
+		2842C6752FEF2BF000AE86C6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2842C6102FEF2A7D00AE86C6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2842C66C2FEF2BF000AE86C6;
+			remoteInfo = ZenlyActivity;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2842C6682FEF2BD100AE86C6 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2842C6772FEF2BF000AE86C6 /* ZenlyActivity.appex in Embed Foundation Extensions */,
+				2842C65C2FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI.appex in Embed Foundation Extensions */,
+				2842C65F2FEF2BD100AE86C6 /* ZenlyBroadcast.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		2842C6182FEF2A7D00AE86C6 /* Zenly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Zenly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2842C6252FEF2A7F00AE86C6 /* ZenlyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZenlyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2842C62F2FEF2A7F00AE86C6 /* ZenlyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZenlyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2842C6462FEF2BD100AE86C6 /* ZenlyBroadcast.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ZenlyBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2842C6482FEF2BD100AE86C6 /* ReplayKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ReplayKit.framework; path = System/Library/Frameworks/ReplayKit.framework; sourceTree = SDKROOT; };
+		2842C6522FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ZenlyBroadcastSetupUI.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2842C6542FEF2BD100AE86C6 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		2842C66D2FEF2BF000AE86C6 /* ZenlyActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ZenlyActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2842C66E2FEF2BF000AE86C6 /* DeviceActivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		2842C6A02FEF2A7D00AE86C6 /* Exceptions for "Zenly" folder in "Zenly" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2842C6172FEF2A7D00AE86C6 /* Zenly */;
+		};
+		2842C6602FEF2BD100AE86C6 /* Exceptions for "ZenlyBroadcast" folder in "ZenlyBroadcast" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2842C6452FEF2BD100AE86C6 /* ZenlyBroadcast */;
+		};
+		2842C6642FEF2BD100AE86C6 /* Exceptions for "ZenlyBroadcastSetupUI" folder in "ZenlyBroadcastSetupUI" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2842C6512FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI */;
+		};
+		2842C6782FEF2BF000AE86C6 /* Exceptions for "ZenlyActivity" folder in "ZenlyActivity" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2842C66C2FEF2BF000AE86C6 /* ZenlyActivity */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2842C61A2FEF2A7D00AE86C6 /* Zenly */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2842C6A02FEF2A7D00AE86C6 /* Exceptions for "Zenly" folder in "Zenly" target */,
+			);
 			path = Zenly;
 			sourceTree = "<group>";
 		};
@@ -43,6 +130,30 @@
 		2842C6322FEF2A7F00AE86C6 /* ZenlyUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ZenlyUITests;
+			sourceTree = "<group>";
+		};
+		2842C64A2FEF2BD100AE86C6 /* ZenlyBroadcast */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2842C6602FEF2BD100AE86C6 /* Exceptions for "ZenlyBroadcast" folder in "ZenlyBroadcast" target */,
+			);
+			path = ZenlyBroadcast;
+			sourceTree = "<group>";
+		};
+		2842C6562FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2842C6642FEF2BD100AE86C6 /* Exceptions for "ZenlyBroadcastSetupUI" folder in "ZenlyBroadcastSetupUI" target */,
+			);
+			path = ZenlyBroadcastSetupUI;
+			sourceTree = "<group>";
+		};
+		2842C6702FEF2BF000AE86C6 /* ZenlyActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2842C6782FEF2BF000AE86C6 /* Exceptions for "ZenlyActivity" folder in "ZenlyActivity" target */,
+			);
+			path = ZenlyActivity;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +180,31 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2842C6432FEF2BD100AE86C6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2842C6492FEF2BD100AE86C6 /* ReplayKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2842C64F2FEF2BD100AE86C6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2842C6532FEF2BD100AE86C6 /* ReplayKit.framework in Frameworks */,
+				2842C6552FEF2BD100AE86C6 /* UIKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2842C66A2FEF2BF000AE86C6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2842C66F2FEF2BF000AE86C6 /* DeviceActivity.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -78,6 +214,10 @@
 				2842C61A2FEF2A7D00AE86C6 /* Zenly */,
 				2842C6282FEF2A7F00AE86C6 /* ZenlyTests */,
 				2842C6322FEF2A7F00AE86C6 /* ZenlyUITests */,
+				2842C64A2FEF2BD100AE86C6 /* ZenlyBroadcast */,
+				2842C6562FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI */,
+				2842C6702FEF2BF000AE86C6 /* ZenlyActivity */,
+				2842C6472FEF2BD100AE86C6 /* Frameworks */,
 				2842C6192FEF2A7D00AE86C6 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,8 +228,21 @@
 				2842C6182FEF2A7D00AE86C6 /* Zenly.app */,
 				2842C6252FEF2A7F00AE86C6 /* ZenlyTests.xctest */,
 				2842C62F2FEF2A7F00AE86C6 /* ZenlyUITests.xctest */,
+				2842C6462FEF2BD100AE86C6 /* ZenlyBroadcast.appex */,
+				2842C6522FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI.appex */,
+				2842C66D2FEF2BF000AE86C6 /* ZenlyActivity.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		2842C6472FEF2BD100AE86C6 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				2842C6482FEF2BD100AE86C6 /* ReplayKit.framework */,
+				2842C6542FEF2BD100AE86C6 /* UIKit.framework */,
+				2842C66E2FEF2BF000AE86C6 /* DeviceActivity.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -102,10 +255,14 @@
 				2842C6142FEF2A7D00AE86C6 /* Sources */,
 				2842C6152FEF2A7D00AE86C6 /* Frameworks */,
 				2842C6162FEF2A7D00AE86C6 /* Resources */,
+				2842C6682FEF2BD100AE86C6 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2842C65B2FEF2BD100AE86C6 /* PBXTargetDependency */,
+				2842C65E2FEF2BD100AE86C6 /* PBXTargetDependency */,
+				2842C6762FEF2BF000AE86C6 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				2842C61A2FEF2A7D00AE86C6 /* Zenly */,
@@ -163,6 +320,72 @@
 			productReference = 2842C62F2FEF2A7F00AE86C6 /* ZenlyUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		2842C6452FEF2BD100AE86C6 /* ZenlyBroadcast */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2842C6612FEF2BD100AE86C6 /* Build configuration list for PBXNativeTarget "ZenlyBroadcast" */;
+			buildPhases = (
+				2842C6422FEF2BD100AE86C6 /* Sources */,
+				2842C6432FEF2BD100AE86C6 /* Frameworks */,
+				2842C6442FEF2BD100AE86C6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2842C64A2FEF2BD100AE86C6 /* ZenlyBroadcast */,
+			);
+			name = ZenlyBroadcast;
+			packageProductDependencies = (
+			);
+			productName = ZenlyBroadcast;
+			productReference = 2842C6462FEF2BD100AE86C6 /* ZenlyBroadcast.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		2842C6512FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2842C6652FEF2BD100AE86C6 /* Build configuration list for PBXNativeTarget "ZenlyBroadcastSetupUI" */;
+			buildPhases = (
+				2842C64E2FEF2BD100AE86C6 /* Sources */,
+				2842C64F2FEF2BD100AE86C6 /* Frameworks */,
+				2842C6502FEF2BD100AE86C6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2842C6562FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI */,
+			);
+			name = ZenlyBroadcastSetupUI;
+			packageProductDependencies = (
+			);
+			productName = ZenlyBroadcastSetupUI;
+			productReference = 2842C6522FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		2842C66C2FEF2BF000AE86C6 /* ZenlyActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2842C6792FEF2BF000AE86C6 /* Build configuration list for PBXNativeTarget "ZenlyActivity" */;
+			buildPhases = (
+				2842C6692FEF2BF000AE86C6 /* Sources */,
+				2842C66A2FEF2BF000AE86C6 /* Frameworks */,
+				2842C66B2FEF2BF000AE86C6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2842C6702FEF2BF000AE86C6 /* ZenlyActivity */,
+			);
+			name = ZenlyActivity;
+			packageProductDependencies = (
+			);
+			productName = ZenlyActivity;
+			productReference = 2842C66D2FEF2BF000AE86C6 /* ZenlyActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +407,15 @@
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = 2842C6172FEF2A7D00AE86C6;
 					};
+					2842C6452FEF2BD100AE86C6 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					2842C6512FEF2BD100AE86C6 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					2842C66C2FEF2BF000AE86C6 = {
+						CreatedOnToolsVersion = 26.6;
+					};
 				};
 			};
 			buildConfigurationList = 2842C6132FEF2A7D00AE86C6 /* Build configuration list for PBXProject "Zenly" */;
@@ -203,6 +435,9 @@
 				2842C6172FEF2A7D00AE86C6 /* Zenly */,
 				2842C6242FEF2A7F00AE86C6 /* ZenlyTests */,
 				2842C62E2FEF2A7F00AE86C6 /* ZenlyUITests */,
+				2842C6452FEF2BD100AE86C6 /* ZenlyBroadcast */,
+				2842C6512FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI */,
+				2842C66C2FEF2BF000AE86C6 /* ZenlyActivity */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +458,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2842C62D2FEF2A7F00AE86C6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2842C6442FEF2BD100AE86C6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2842C6502FEF2BD100AE86C6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2842C66B2FEF2BF000AE86C6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +509,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2842C6422FEF2BD100AE86C6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2842C64E2FEF2BD100AE86C6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2842C6692FEF2BF000AE86C6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +542,21 @@
 			isa = PBXTargetDependency;
 			target = 2842C6172FEF2A7D00AE86C6 /* Zenly */;
 			targetProxy = 2842C6302FEF2A7F00AE86C6 /* PBXContainerItemProxy */;
+		};
+		2842C65B2FEF2BD100AE86C6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2842C6512FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI */;
+			targetProxy = 2842C65A2FEF2BD100AE86C6 /* PBXContainerItemProxy */;
+		};
+		2842C65E2FEF2BD100AE86C6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2842C6452FEF2BD100AE86C6 /* ZenlyBroadcast */;
+			targetProxy = 2842C65D2FEF2BD100AE86C6 /* PBXContainerItemProxy */;
+		};
+		2842C6762FEF2BF000AE86C6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2842C66C2FEF2BF000AE86C6 /* ZenlyActivity */;
+			targetProxy = 2842C6752FEF2BF000AE86C6 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -395,11 +687,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Zenly/Zenly.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8SPYVQ2PZH;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Zenly/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -427,11 +721,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Zenly/Zenly.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8SPYVQ2PZH;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Zenly/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -538,6 +834,178 @@
 			};
 			name = Release;
 		};
+		2842C6622FEF2BD100AE86C6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ZenlyBroadcast/ZenlyBroadcast.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8SPYVQ2PZH;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ZenlyBroadcast/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ZenlyBroadcast;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = andrew.Zenly.ZenlyBroadcast;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2842C6632FEF2BD100AE86C6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ZenlyBroadcast/ZenlyBroadcast.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8SPYVQ2PZH;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ZenlyBroadcast/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ZenlyBroadcast;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = andrew.Zenly.ZenlyBroadcast;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		2842C6662FEF2BD100AE86C6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8SPYVQ2PZH;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ZenlyBroadcastSetupUI/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ZenlyBroadcastSetupUI;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = andrew.Zenly.ZenlyBroadcastSetupUI;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2842C6672FEF2BD100AE86C6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8SPYVQ2PZH;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ZenlyBroadcastSetupUI/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ZenlyBroadcastSetupUI;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = andrew.Zenly.ZenlyBroadcastSetupUI;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		2842C67A2FEF2BF000AE86C6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ZenlyActivity/ZenlyActivity.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8SPYVQ2PZH;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ZenlyActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ZenlyActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = andrew.Zenly.ZenlyActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2842C67B2FEF2BF000AE86C6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ZenlyActivity/ZenlyActivity.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8SPYVQ2PZH;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ZenlyActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ZenlyActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = andrew.Zenly.ZenlyActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -573,6 +1041,33 @@
 			buildConfigurations = (
 				2842C6402FEF2A7F00AE86C6 /* Debug */,
 				2842C6412FEF2A7F00AE86C6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2842C6612FEF2BD100AE86C6 /* Build configuration list for PBXNativeTarget "ZenlyBroadcast" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2842C6622FEF2BD100AE86C6 /* Debug */,
+				2842C6632FEF2BD100AE86C6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2842C6652FEF2BD100AE86C6 /* Build configuration list for PBXNativeTarget "ZenlyBroadcastSetupUI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2842C6662FEF2BD100AE86C6 /* Debug */,
+				2842C6672FEF2BD100AE86C6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2842C6792FEF2BF000AE86C6 /* Build configuration list for PBXNativeTarget "ZenlyActivity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2842C67A2FEF2BF000AE86C6 /* Debug */,
+				2842C67B2FEF2BF000AE86C6 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
