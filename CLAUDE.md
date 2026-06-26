@@ -1,10 +1,10 @@
 # Zenly
 
-Intent-aware distraction blocker with a conversational SMS agent. A user texts a Twilio
-number, an LLM agent collects their task/duration/accountability-contact and starts a focus
-session in the iOS app. The app captures screenshots (ReplayKit), a backend vision model judges
-"on task" vs "off task", and escalation goes: local notification → ManagedSettings shield →
-funny SMS to the accountability contact.
+Intent-aware distraction blocker with a conversational iMessage agent. A user iMessages the
+Mac running the backend, an LLM agent collects their task/duration/accountability-contact and
+starts a focus session in the iOS app. The app captures screenshots (ReplayKit), a backend
+vision model judges "on task" vs "off task", and escalation goes: local notification →
+ManagedSettings shield → funny iMessage to the accountability contact.
 
 Hackathon project. macOS, Xcode 26.6, Node 24, iPhone target.
 
@@ -17,7 +17,7 @@ ZenlyBroadcast/          # ReplayKit RPBroadcastSampleHandler (screen capture)  
 ZenlyBroadcastSetupUI/   # ReplayKit setup UI extension                         [App Groups]
 ZenlyActivity/           # DeviceActivityMonitor extension (shield)             [Family Controls — PAID ONLY]
 ZenlyTests/ ZenlyUITests/
-backend/                 # Node.js + Express: SMS agent, vision judge, snitch
+backend/                 # Node.js + Express + TypeScript: iMessage agent, vision judge, snitch
 ```
 
 ## Build order & status
@@ -25,14 +25,14 @@ backend/                 # Node.js + Express: SMS agent, vision judge, snitch
 | Phase | What | Status |
 |------|------|--------|
 | 1 | Xcode scaffold: 4 targets, entitlements, App Group, URL scheme | ✅ done, builds clean |
-| 2 | Node backend scaffold: Express + provider-agnostic LLM + 3 routes + echo webhook | ✅ done, smoke-tested |
-| 3 | SMS agent conversation loop (stateful, `<session>` parsing, Twilio reply) | ◐ built in `backend/src/routes/sms.js`; activates when an LLM key is set |
+| 2 | Node backend scaffold: Express + provider-agnostic LLM + routes + iMessage watcher | ✅ done, smoke-tested |
+| 3 | iMessage agent conversation loop (stateful, `<session>` parsing, iMessage reply) | ◐ built in `backend/src/agent/handler.ts`; activates when an LLM key is set |
 | 4 | SwiftUI: waiting screen, active-session timer + status, stats | ◐ waiting + basic active screen exist (`ContentView.swift`); timer/stats TODO |
 | 5 | ReplayKit broadcast: frame → JPEG → App Group container | ☐ todo |
 | 6 | App polling loop: read frames → POST /judge → nudge/escalate | ☐ todo |
 | 7 | DeviceActivityMonitor: read shield instruction → ManagedSettingsStore | ☐ todo (PAID — Family Controls) |
-| 8 | Snitch escalation → POST /snitch → Twilio | ◐ `/snitch` route done; app trigger todo |
-| 9 | Demo polish: shield text, summary SMS, stats dashboard | ☐ todo |
+| 8 | Snitch escalation → POST /snitch → iMessage to accountability contact | ◐ `/snitch` route done; app trigger todo |
+| 9 | Demo polish: shield text, summary message, stats dashboard | ☐ todo |
 
 ## iOS project facts
 
@@ -84,31 +84,41 @@ shield also needs a **paid account**. Phases 1–4 demo fine on the simulator.
 
 ## Backend
 
-Node + Express in `backend/`. **Provider-agnostic LLM layer** — Claude (Anthropic) by default,
-OpenAI by flipping `LLM_PROVIDER`. Neither vendor is hard-wired.
+TypeScript + Node + Express in `backend/`. **Provider-agnostic LLM layer** — Claude (Anthropic)
+by default, OpenAI by flipping `LLM_PROVIDER`. Neither vendor is hard-wired.
+
+Messaging uses **`@photon-ai/imessage-kit`** — reads `~/Library/Messages/chat.db` via SQLite and
+sends via AppleScript. No Twilio account, no ngrok, no webhook exposure needed. Requires macOS
+with **Full Disk Access** granted to Terminal/Node in System Preferences → Privacy & Security.
 
 ```
-src/index.js              # express app, route mounting, health
-src/config.js             # env + provider/twilio "configured?" helpers
-src/llm/index.js          # getLLM() factory keyed on LLM_PROVIDER
-src/llm/anthropic.js      # chat()+vision() via @anthropic-ai/sdk (default model claude-sonnet-4-6)
-src/llm/openai.js         # chat()+vision() via openai (default model gpt-4o)
-src/prompts.js            # agent / judge / snitch system prompts
-src/store/sessions.js     # in-memory state per phone (history, session, stats)
-src/services/twilio.js    # sendSMS() + twiml() reply builder
-src/util/deeplink.js      # startLink() — encodes spaces as %20 (NOT "+", which iOS won't decode)
-src/routes/sms.js         # POST /webhook/sms — agent loop, or echo if no LLM key
-src/routes/judge.js       # POST /judge — vision verdict
-src/routes/snitch.js      # POST /snitch — funny shame SMS
-src/routes/session.js     # POST /session/start, GET /session/:phone
+src/index.ts              # express app + iMessage watcher startup
+src/config.ts             # env + llmConfigured() helper
+src/types.ts              # shared TypeScript interfaces
+src/llm/index.ts          # getLLM() factory keyed on LLM_PROVIDER
+src/llm/anthropic.ts      # chat()+vision() via @anthropic-ai/sdk (default claude-sonnet-4-6)
+src/llm/openai.ts         # chat()+vision() via openai (default gpt-4o)
+src/prompts.ts            # agent / judge / snitch system prompts
+src/store/sessions.ts     # in-memory state per phone (history, session, stats)
+src/services/imessage.ts  # getSDK() singleton + sendMessage() — wraps imessage-kit
+src/util/deeplink.ts      # startLink() — encodes spaces as %20 (NOT "+", which iOS won't decode)
+src/agent/handler.ts      # handleMessage(from, text) → reply string — the full agent loop
+src/routes/judge.ts       # POST /judge — vision verdict
+src/routes/snitch.ts      # POST /snitch — funny shame iMessage
+src/routes/session.ts     # POST /session/start, GET /session/:phone
 ```
 
 **LLM interface** (both providers implement identically — add a vendor = one file + one registry line):
 - `chat({ system, messages, maxTokens }) -> Promise<string>`
 - `vision({ system, prompt, imageBase64, mediaType, maxTokens }) -> Promise<string>`
 
-**Degraded mode** (no keys): server boots and every route responds — `/webhook/sms` echoes,
-`/judge` returns `on_task:true`, `/snitch` uses a canned message and logs instead of sending.
+**iMessage flow**: `sdk.startWatching({ onDirectMessage })` in `index.ts` replaces the old Twilio
+webhook. Each incoming DM calls `handleMessage(from, text)` (same agent logic) and sends the reply
+with `sdk.send({ to: chatId, text })`. The Express server starts independently — watcher failure
+(e.g. no Full Disk Access) is non-fatal and logged.
+
+**Degraded mode** (no LLM key): server boots and every route responds — agent echoes messages,
+`/judge` returns `on_task:true`, `/snitch` uses a canned message.
 
 ### Run
 
@@ -116,7 +126,8 @@ src/routes/session.js     # POST /session/start, GET /session/:phone
 cd backend
 npm install
 cp .env.example .env     # add ANTHROPIC_API_KEY (or set LLM_PROVIDER=openai + OPENAI_API_KEY)
-npm run dev              # node --watch; or: npm start
+# Grant Full Disk Access to Terminal in System Preferences → Privacy & Security
+npm run dev              # tsx watch src/index.ts
 ```
 
 ### Routes
@@ -124,18 +135,12 @@ npm run dev              # node --watch; or: npm start
 | Method | Path | Body / purpose |
 |--------|------|----------------|
 | GET  | `/`               | health + config status |
-| POST | `/webhook/sms`    | Twilio form post → agent reply (TwiML) or echo |
 | POST | `/judge`          | `{ task, imageBase64, mediaType? }` → `{ on_task, confidence, reason }` |
-| POST | `/snitch`         | `{ task, contactPhone, screenContent, userPhone? }` → SMS to contact |
+| POST | `/snitch`         | `{ task, contactPhone, screenContent, userPhone? }` → iMessage to contact |
 | POST | `/session/start`  | `{ userPhone, task, durationMinutes, contactPhone }` → session + deeplink |
 | GET  | `/session/:phone` | polling handoff for the app |
 
-### Twilio (set up when ready)
-
-Buy a number → set Messaging "A message comes in" webhook to
-`https://<ngrok-or-host>/webhook/sms` (POST). `ngrok http 3000` to expose localhost. Put
-`TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` in `.env` (only needed for the
-outbound snitch; inbound replies use TwiML, no creds).
+Note: there is no `/webhook/sms` route. Inbound messages arrive via the iMessage watcher, not HTTP.
 
 ## Conventions / gotchas
 
@@ -146,5 +151,9 @@ outbound snitch; inbound replies use TwiML, no creds).
 - **Info.plist + synchronized groups**: `Zenly/Info.plist` has a membership exception in the
   `.pbxproj` (`PBXFileSystemSynchronizedBuildFileExceptionSet`) so it isn't double-processed as a
   bundle resource. If you add another generated-then-merged plist, it needs the same exception.
+- **imessage-kit requires Full Disk Access** — the SDK opens `~/Library/Messages/chat.db` at
+  construction. Without FDA, `getSDK()` throws `IMessageError(DATABASE)`. The server still boots;
+  only the watcher and outbound sends fail.
+- **SMS forwarding for non-iMessage contacts**: user's iPhone must be nearby with Settings →
+  Messages → Text Message Forwarding → [Mac] enabled. For demo purposes both sides can be iMessage.
 - Keep secrets in `backend/.env` (gitignored); never commit keys.
-```
