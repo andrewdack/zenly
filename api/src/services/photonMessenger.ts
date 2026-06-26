@@ -43,8 +43,7 @@ export class PhotonMessenger implements MessageSender {
       provider: "photon",
       platform: "imessage",
       to: input.to,
-      messageId: sent?.id,
-      spaceId: space.id
+      messageId: sent?.id ?? space.id,
     };
   }
 }

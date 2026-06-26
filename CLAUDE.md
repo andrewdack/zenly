@@ -91,79 +91,75 @@ xcodebuild -project Zenly.xcodeproj -scheme Zenly -sdk iphonesimulator \
 Note: ReplayKit screen capture (Phase 5) and the shield (Phase 7) need a **physical device**; the
 shield also needs a **paid account**. Phases 1–4 demo fine on the simulator.
 
-## Backend
+## API server (`api/`)
 
-TypeScript + Node + Express in `backend/`. **Provider-agnostic LLM layer** — Claude (Anthropic)
-by default, OpenAI by flipping `LLM_PROVIDER`. Neither vendor is hard-wired.
+TypeScript + Node + Express. **`api/` is the canonical server.** `backend/` is legacy reference.
 
-Messaging uses **`@photon-ai/imessage-kit`** — reads `~/Library/Messages/chat.db` via SQLite and
-sends via AppleScript. No Twilio account, no ngrok, no webhook exposure needed. Requires macOS
-with **Full Disk Access** granted to Terminal/Node in System Preferences → Privacy & Security.
+**LLM**: everything goes through **OpenRouter** (OpenAI-compatible) — one `OPENROUTER_API_KEY`
+covers both vision (focus judge) and agent chat. Model is configurable per role.
+
+**Messaging** (dual-provider, same `MessageSender` interface):
+- `photon` — cloud via `spectrum-ts` / Photon project credentials. No local Mac needed for sending.
+- `local` — `@photon-ai/imessage-kit`, reads `~/Library/Messages/chat.db` + sends via AppleScript.
+  Requires macOS + Full Disk Access. Auto-selected when Photon creds are absent.
+
+**Receiving** (iMessage watcher): always local `imessage-kit` — the backend runs on a Mac anyway.
+Watcher failure (no Full Disk Access) is non-fatal; server boots without it.
+
+**Image format**: multipart JPEG (`POST /isFocused`, field name `image`). ReplayKit frames are
+converted `CMSampleBuffer → CVPixelBuffer → UIImage → JPEG Data` before upload.
 
 ```
-src/index.ts              # express app + iMessage watcher startup
-src/config.ts             # env + llmConfigured() helper
-src/types.ts              # shared TypeScript interfaces
-src/llm/index.ts          # getLLM() factory keyed on LLM_PROVIDER
-src/llm/anthropic.ts      # chat()+vision() via @anthropic-ai/sdk (default claude-sonnet-4-6)
-src/llm/openai.ts         # chat()+vision() via openai (default gpt-4o)
-src/prompts.ts            # agent / judge / snitch system prompts
-src/store/sessions.ts     # in-memory state per phone (history, session, stats)
-src/services/imessage.ts  # getSDK() singleton + sendMessage() — wraps imessage-kit
-src/util/deeplink.ts      # startLink() — encodes spaces as %20 (NOT "+", which iOS won't decode)
-src/agent/handler.ts      # handleMessage(from, text) → reply string — the full agent loop
-src/routes/judge.ts       # POST /judge — vision verdict
-src/routes/snitch.ts      # POST /snitch — funny shame iMessage
-src/routes/session.ts     # POST /session/start, GET /session/:phone
+api/src/server.ts                       # entry: builds providers, starts Express + watcher
+api/src/app.ts                          # createApp() — all routes, error handler
+api/src/config.ts                       # env vars + getConfig()
+api/src/types.ts                        # shared TS interfaces (Session, ChatMessage, etc.)
+api/src/prompts.ts                      # agent + snitch system prompts
+api/src/agent/handler.ts               # createAgentHandler() — iMessage conversation loop
+api/src/store/sessions.ts              # in-memory session state per phone number
+api/src/util/deeplink.ts               # startLink() — %20 encoding (NOT "+")
+api/src/services/visionProvider.ts     # VisionProvider interface
+api/src/services/openAiFocusProvider.ts # OpenRouter vision implementation
+api/src/services/messageSender.ts      # MessageSender interface
+api/src/services/photonMessenger.ts    # cloud send via spectrum-ts
+api/src/services/imessageKitMessenger.ts # local send + exposes .sdk for the watcher
+api/src/http.ts                        # asyncHandler + HttpError helpers
 ```
-
-**LLM interface** (both providers implement identically — add a vendor = one file + one registry line):
-- `chat({ system, messages, maxTokens }) -> Promise<string>`
-- `vision({ system, prompt, imageBase64, mediaType, maxTokens }) -> Promise<string>`
-
-**iMessage flow**: `sdk.startWatching({ onDirectMessage })` in `index.ts` starts the agent loop.
-Each incoming DM calls `handleMessage(from, text)` and replies via `sdk.send({ to: chatId, text })`.
-The agent collects **task** (required) and **duration** (optional — indefinite is fine). It does NOT
-collect the accountability contact; that lives in the iOS app's settings. The Express server starts
-independently — watcher failure (e.g. no Full Disk Access) is non-fatal and logged.
-
-**Degraded mode** (no LLM key): server boots and every route responds — agent echoes messages,
-`/judge` returns `on_task:true`, `/snitch` uses a canned message.
 
 ### Run
 
 ```bash
-cd backend
+cd api
 npm install
-cp .env.example .env     # add ANTHROPIC_API_KEY (or set LLM_PROVIDER=openai + OPENAI_API_KEY)
-# Grant Full Disk Access to Terminal in System Preferences → Privacy & Security
-npm run dev              # tsx watch src/index.ts
+cp .env.example .env   # add OPENROUTER_API_KEY; optionally add Photon creds
+# For local messaging: grant Full Disk Access to Terminal → System Preferences → Privacy & Security
+npm run dev            # tsx watch src/server.ts  (port 3001)
 ```
 
 ### Routes
 
 | Method | Path | Body / purpose |
 |--------|------|----------------|
-| GET  | `/`               | health + config status |
-| POST | `/judge`          | `{ task, imageBase64, mediaType? }` → `{ on_task, confidence, reason }` |
-| POST | `/snitch`         | `{ task, contactPhone, screenContent, userPhone? }` → iMessage to contact |
-| POST | `/session/start`  | `{ userPhone, task, durationMinutes? }` → session + deeplink |
-| GET  | `/session/:phone` | polling handoff for the app |
+| GET  | `/health`           | `{ ok: true }` |
+| POST | `/isFocused`        | multipart: `image` (JPEG) + optional `task` form field → `{ isFocused, confidence, reason }` |
+| POST | `/sendMessage`      | `{ to, message }` → send iMessage via configured provider |
+| POST | `/session/start`    | `{ userPhone, task, durationMinutes? }` → session + deeplink |
+| GET  | `/session/:phone`   | active session + stats + deeplink |
+| POST | `/snitch`           | `{ task, contactPhone, screenContent, userPhone? }` → LLM-generated shame iMessage |
 
-Note: there is no `/webhook/sms` route. Inbound messages arrive via the iMessage watcher, not HTTP.
+Inbound messages arrive via the local iMessage watcher, not HTTP.
 
 ## Conventions / gotchas
 
-- **LLM provider is swappable** — keep new model calls behind `getLLM()`; don't import a vendor SDK
-  directly in routes. Default model is `claude-sonnet-4-6` (set per spec; `claude-opus-4-8` is the
-  current most-capable if you want the agent sharper).
+- **OpenRouter for everything** — one API key, configure `FOCUS_MODEL` and `AGENT_MODEL` independently.
+  Default focus model: `google/gemma-3-12b-it`. Default agent model: `anthropic/claude-sonnet-4-6`.
 - **Deep-link encoding**: use `%20` for spaces, not `+`. iOS `URLComponents` does not decode `+`.
 - **Info.plist + synchronized groups**: `Zenly/Info.plist` has a membership exception in the
   `.pbxproj` (`PBXFileSystemSynchronizedBuildFileExceptionSet`) so it isn't double-processed as a
   bundle resource. If you add another generated-then-merged plist, it needs the same exception.
 - **imessage-kit requires Full Disk Access** — the SDK opens `~/Library/Messages/chat.db` at
-  construction. Without FDA, `getSDK()` throws `IMessageError(DATABASE)`. The server still boots;
-  only the watcher and outbound sends fail.
-- **SMS forwarding for non-iMessage contacts**: user's iPhone must be nearby with Settings →
-  Messages → Text Message Forwarding → [Mac] enabled. For demo purposes both sides can be iMessage.
-- Keep secrets in `backend/.env` (gitignored); never commit keys.
+  construction. Without FDA it throws `IMessageError(DATABASE)`. Server still boots; watcher and
+  local sends are skipped.
+- **SMS forwarding for non-iMessage contacts**: iPhone must be nearby with Settings → Messages →
+  Text Message Forwarding → [Mac] enabled. For demo both sides can be iMessage.
+- Keep secrets in `api/.env` (gitignored); never commit keys.
