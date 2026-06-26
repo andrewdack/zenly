@@ -10,6 +10,8 @@ cp .env.example .env
 npm run dev
 ```
 
+Set `OPENROUTER_API_KEY` in `.env` for focus checks. The default vision model is `google/gemma-3-12b-it` via OpenRouter.
+
 ## Endpoints
 
 ### `POST /isFocused`

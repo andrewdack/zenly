@@ -21,20 +21,29 @@ function parseJsonObject(content: string): unknown {
 export interface OpenAiFocusProviderOptions {
   apiKey?: string;
   model: string;
+  baseURL?: string;
+  providerName?: string;
   client?: OpenAI;
 }
 
 export class OpenAiFocusProvider implements VisionProvider {
   private readonly client: OpenAI;
   private readonly model: string;
+  private readonly providerName: string;
 
   constructor(options: OpenAiFocusProviderOptions) {
     if (!options.apiKey && !options.client) {
-      throw new Error("OPENAI_API_KEY is required for OpenAI focus checks");
+      throw new Error("OPENROUTER_API_KEY is required for focus checks");
     }
 
     this.model = options.model;
-    this.client = options.client ?? new OpenAI({ apiKey: options.apiKey });
+    this.providerName = options.providerName ?? "openrouter";
+    this.client =
+      options.client ??
+      new OpenAI({
+        apiKey: options.apiKey,
+        baseURL: options.baseURL
+      });
   }
 
   async isFocused(input: FocusImageInput): Promise<FocusResult> {
@@ -73,17 +82,17 @@ export class OpenAiFocusProvider implements VisionProvider {
 
     const content = completion.choices[0]?.message?.content;
     if (!content) {
-      throw new HttpError(502, "OpenAI returned an empty focus response", "openai_empty_response");
+      throw new HttpError(502, "Focus provider returned an empty response", "focus_provider_empty_response");
     }
 
     const parsed = focusResponseSchema.safeParse(parseJsonObject(content));
     if (!parsed.success) {
-      throw new HttpError(502, "OpenAI returned an invalid focus response", "openai_invalid_response");
+      throw new HttpError(502, "Focus provider returned an invalid response", "focus_provider_invalid_response");
     }
 
     return {
       ...parsed.data,
-      provider: "openai",
+      provider: this.providerName,
       model: this.model
     };
   }

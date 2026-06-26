@@ -1,7 +1,8 @@
 export interface ApiConfig {
   port: number;
-  openAiApiKey?: string;
-  openAiFocusModel: string;
+  openRouterApiKey?: string;
+  openRouterBaseUrl: string;
+  focusModel: string;
   maxImageBytes: number;
   photonProjectId?: string;
   photonProjectSecret?: string;
@@ -16,8 +17,9 @@ function readNumber(value: string | undefined, fallback: number): number {
 export function getConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   return {
     port: readNumber(env.PORT, 3001),
-    openAiApiKey: env.OPENAI_API_KEY,
-    openAiFocusModel: env.OPENAI_FOCUS_MODEL || "gpt-4o-mini",
+    openRouterApiKey: env.OPENROUTER_API_KEY,
+    openRouterBaseUrl: env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
+    focusModel: env.FOCUS_MODEL || "google/gemma-3-12b-it",
     maxImageBytes: readNumber(env.MAX_IMAGE_BYTES, 5_000_000),
     photonProjectId: env.PHOTON_PROJECT_ID,
     photonProjectSecret: env.PHOTON_PROJECT_SECRET
