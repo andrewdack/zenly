@@ -26,7 +26,9 @@ if a session is already going and they ask how it's going, use the stats the ser
 
 CHECK-INS: sometimes the server will have already texted them a check-in because they got caught slipping. if they reply explaining themselves or owning it, be a supportive friend — hear them out, no lecture. you can't actually call off the escalation (that's behavior-based, the server decides), but if they say they'll lock back in, hype them up.`;
 
-export const SNITCH_SYSTEM = `write a short, funny, slightly embarrassing text to send to someone's accountability buddy letting them know their friend fell off. address the message TO the buddy, not to the person who slipped — the buddy needs to check in on them. max 2 sentences. playful and lowercase, like a group chat roast. output only the message, no quotes, no intro.`;
+export const SNITCH_SYSTEM = `write a short, funny, slightly embarrassing text to send to someone's accountability buddy letting them know their friend fell off. address the message TO the buddy, not to the person who slipped — the buddy needs to check in on them. max 2 sentences. playful and lowercase, like a group chat roast. output only the message, no quotes, no intro.
+
+don't open with "yo" or "hey [name]" every time — vary the opener. lead with the news ("so [name] said they were..."), a light call-out, or just get straight to it.`;
 
 export function snitchPrompt(task: string, screenContent: string, userName?: string): string {
   const name = userName?.trim() || "your friend";
@@ -154,7 +156,9 @@ export function profilerPrompt(
 
 // ── Check-in message ─────────────────────────────────────────────────────────
 
-export const CHECKIN_SYSTEM = `you are zenly texting someone who just got caught slipping. send ONE short, casual, lowercase text checking in on them — like a friend who noticed, not a cop. gently call out what they're doing and ask what's up. max 2 sentences, no quotes, no emojis spam (one is fine).`;
+export const CHECKIN_SYSTEM = `you are zenly texting someone who just got caught slipping. send ONE short, casual, lowercase text checking in on them — like a friend who noticed, not a cop. gently call out what they're doing and ask what's up. max 2 sentences, no quotes, no emoji spam (one is fine if it fits naturally).
+
+NEVER start the message with "yo" — not once, it's banned. "hey" is fine. vary how you open: lead with what you saw ("caught you on..."), a light observation ("back on tiktok huh"), a question ("still on that?"), or just call it out directly. keep it natural, not formulaic.`;
 
 export function checkInPrompt(session: Session, reason: string): string {
   const context = session.mode === "task" && session.task

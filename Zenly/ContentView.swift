@@ -129,7 +129,7 @@ private struct HomeScreen: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Button(action: textTheAgent) {
-                Text("text the agent")
+                Text("text zenly")
                     .font(.redaction(size: 40, weight: .bold))
                     .minimumScaleFactor(0.72)
                     .lineLimit(2)
@@ -166,11 +166,17 @@ private struct SettingsSummary: View {
     let onEdit: () -> Void
     let onProfile: () -> Void
 
+    private var witnessSummary: String {
+        guard !store.contactPhone.isEmpty else { return "not set" }
+        let name = store.witnessName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let phone = DisplayFormat.phone(store.contactPhone)
+        return name.isEmpty ? phone : "\(name) · \(phone)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             SummaryRow(key: "mode", value: store.interventionLevel.rawValue.lowercased())
-            SummaryRow(key: "witness",
-                       value: store.contactPhone.isEmpty ? "not set" : DisplayFormat.phone(store.contactPhone))
+            SummaryRow(key: "witness", value: witnessSummary)
 
             HStack(spacing: 18) {
                 Button(action: onEdit) {
@@ -273,6 +279,8 @@ private struct SettingsScreen: View {
                 .font(.redactionItalic(size: 18))
                 .opacity(0.7)
                 .padding(.top, 26)
+            NameField(text: $store.witnessName, placeholder: "witness name")
+                .padding(.top, 10)
             PhoneField(text: $store.contactPhone)
                 .padding(.top, 10)
             Text(contactHint)
@@ -333,7 +341,9 @@ private struct SettingsScreen: View {
         if trimmed.isEmpty {
             return "example: +1 (415) 555-0123"
         }
-        return "will text \(DisplayFormat.phone(trimmed)) if you doomscroll or get distracted."
+        let name = store.witnessName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let who = name.isEmpty ? "them" : name
+        return "will text \(who) (\(DisplayFormat.phone(trimmed))) if you doomscroll or get distracted."
     }
 
     private func finishSettings() {
@@ -376,6 +386,11 @@ private struct RunningSessionView: View {
     let onEnd: () -> Void
     @Environment(SessionStore.self) private var store
 
+    private var witnessLabel: String {
+        let name = store.witnessName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "your witness" : name
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
@@ -393,6 +408,14 @@ private struct RunningSessionView: View {
                 .font(.redaction(size: 60, weight: .bold))
                 .tracking(-0.8)
                 .padding(.top, 36)
+
+            if store.interventionLevel == .snitch {
+                Text("\(witnessLabel) is watching 👀")
+                    .font(.redactionItalic(size: 18))
+                    .opacity(0.82)
+                    .padding(.top, 8)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Text(session.isGuardian ? "guardian mode" : "currently focusing on")
                 .font(.redactionItalic(size: 20))
@@ -503,12 +526,22 @@ private struct BroadcastStartCard: View {
 private struct JudgeStatusCard: View {
     @Environment(SessionStore.self) private var store
 
+    /// Friendly "name · phone" for the running session (name shown when we have it).
+    private var identity: String {
+        let name = store.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let phone = store.userPhone.isEmpty ? "" : DisplayFormat.phone(store.userPhone)
+        switch (name.isEmpty, phone.isEmpty) {
+        case (false, false): return "\(name) · \(phone)"
+        case (false, true):  return name
+        default:             return phone
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SummaryRow(key: "judge", value: store.judgeStatusText)
-            SummaryRow(key: "api", value: DisplayFormat.apiBaseURL(API_BASE_URL))
-            if !store.userPhone.isEmpty {
-                SummaryRow(key: "phone", value: DisplayFormat.phone(store.userPhone))
+            SummaryRow(key: "status", value: store.judgeStatusText)
+            if !identity.isEmpty {
+                SummaryRow(key: "you", value: identity)
             }
             if !store.lastJudgeReason.isEmpty {
                 Text(store.lastJudgeReason)
@@ -649,10 +682,11 @@ private struct PhoneField: View {
 
 private struct NameField: View {
     @Binding var text: String
+    var placeholder: String = "what should we call you?"
 
     var body: some View {
         EditableTextField(
-            placeholder: "what should we call you?",
+            placeholder: placeholder,
             text: $text,
             keyboardType: .default,
             textContentType: .givenName,
@@ -751,17 +785,10 @@ private extension Font {
 
 private extension Color {
     static let zenlyFog = Color(red: 0.40, green: 0.40, blue: 0.39)
+    static let zenlyDanger = Color(red: 1, green: 0.35, blue: 0.35)
 }
 
 private enum DisplayFormat {
-    static func apiBaseURL(_ url: URL) -> String {
-        let host = url.host ?? url.absoluteString
-        if let port = url.port {
-            return "\(host):\(port)"
-        }
-        return host
-    }
-
     static func phone(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "not set" }
@@ -823,6 +850,15 @@ private struct ProfileScreen: View {
             if let data = profileData {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
+                        if let name = data.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+                            Text("hey \(name.lowercased()) —")
+                                .font(.redactionItalic(size: 20))
+                                .opacity(0.82)
+                        }
+                        FocusBreakdownCard(stats: data.stats)
+                        if !weaknessNodes(data.stats).isEmpty {
+                            WeaknessGraphCard(nodes: weaknessNodes(data.stats))
+                        }
                         ProfileStatsCard(data: data)
                         if !data.memories.isEmpty {
                             MemoriesCard(memories: data.memories)
@@ -866,6 +902,13 @@ private struct ProfileScreen: View {
             }
         }
     }
+
+    /// Destructive categories the user got caught in, biggest offender first.
+    private func weaknessNodes(_ stats: ProfileStats) -> [WeaknessNode] {
+        stats.byCategory
+            .map { WeaknessNode(name: $0.key, count: $0.value) }
+            .sorted { $0.count > $1.count }
+    }
 }
 
 private struct ProfileStatsCard: View {
@@ -878,23 +921,260 @@ private struct ProfileStatsCard: View {
         return Int(Double(good) / Double(total) * 100)
     }
 
-    private var topOffense: String? {
-        data.stats.byCategory.max(by: { $0.value < $1.value })?.key
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(key: "sessions judged", value: "\(data.stats.total)")
+            SummaryRow(key: "checks run", value: "\(data.stats.total)")
             SummaryRow(key: "on task", value: "\(onTaskPct)%")
-            if let offense = topOffense {
-                SummaryRow(key: "top weakness", value: offense)
-            }
             SummaryRow(key: "check-ins", value: "\(data.stats.checkIns)")
             SummaryRow(key: "snitches", value: "\(data.stats.snitches)")
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(Rectangle().stroke(.white.opacity(0.85), lineWidth: 1.6))
+    }
+}
+
+// MARK: - Focus breakdown (donut chart)
+
+private struct DonutSlice: Identifiable {
+    let id = UUID()
+    let label: String
+    let value: Int
+    let color: Color
+}
+
+private struct FocusBreakdownCard: View {
+    let stats: ProfileStats
+
+    private var good: Int { (stats.byStatus["on_task"] ?? 0) + (stats.byStatus["ok"] ?? 0) }
+    private var offTask: Int { stats.byStatus["off_task"] ?? 0 }
+    private var destructive: Int { stats.byStatus["destructive"] ?? 0 }
+    private var onTaskPct: Int { stats.total > 0 ? Int(Double(good) / Double(stats.total) * 100) : 0 }
+
+    private var slices: [DonutSlice] {
+        [
+            DonutSlice(label: "on task", value: good, color: .white),
+            DonutSlice(label: "off task", value: offTask, color: Color.zenlyFog),
+            DonutSlice(label: "destructive", value: destructive, color: Color.zenlyDanger)
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("focus breakdown")
+                .font(.redactionItalic(size: 16))
+                .opacity(0.7)
+
+            if stats.total == 0 {
+                Text("no checks yet — start a session.")
+                    .font(.redactionItalic(size: 16))
+                    .opacity(0.6)
+            } else {
+                HStack(spacing: 20) {
+                    ZStack {
+                        FocusDonut(slices: slices)
+                        VStack(spacing: 0) {
+                            Text("\(onTaskPct)%")
+                                .font(.redaction(size: 30, weight: .bold))
+                            Text("on task")
+                                .font(.redactionItalic(size: 13))
+                                .opacity(0.7)
+                        }
+                    }
+                    .frame(width: 132, height: 132)
+
+                    VStack(alignment: .leading, spacing: 11) {
+                        ForEach(slices) { slice in
+                            LegendRow(slice: slice, total: stats.total)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(Rectangle().stroke(.white.opacity(0.85), lineWidth: 1.6))
+    }
+}
+
+private struct LegendRow: View {
+    let slice: DonutSlice
+    let total: Int
+    private var pct: Int { total > 0 ? Int(Double(slice.value) / Double(total) * 100) : 0 }
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Rectangle()
+                .fill(slice.color)
+                .frame(width: 11, height: 11)
+                .overlay(Rectangle().stroke(.white.opacity(0.5), lineWidth: 1))
+            Text(slice.label)
+                .font(.redactionItalic(size: 16))
+                .opacity(0.85)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 6)
+            Text("\(pct)%")
+                .font(.redaction(size: 16, weight: .bold))
+        }
+    }
+}
+
+private struct FocusDonut: View {
+    let slices: [DonutSlice]
+    private var total: Int { slices.reduce(0) { $0 + $1.value } }
+
+    /// Cumulative (start, end) fractions per non-empty slice, with a small gap.
+    private var segments: [(start: CGFloat, end: CGFloat, color: Color)] {
+        guard total > 0 else { return [] }
+        var acc: CGFloat = 0
+        var out: [(CGFloat, CGFloat, Color)] = []
+        for s in slices where s.value > 0 {
+            let frac = CGFloat(s.value) / CGFloat(total)
+            out.append((acc, acc + frac, s.color))
+            acc += frac
+        }
+        return out
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let dim = min(geo.size.width, geo.size.height)
+            let lineWidth = dim * 0.17
+            let ringSize = dim - lineWidth
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.08), lineWidth: lineWidth)
+                    .frame(width: ringSize, height: ringSize)
+                ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
+                    Circle()
+                        .trim(from: seg.start, to: max(seg.start, seg.end - 0.012))
+                        .stroke(seg.color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: ringSize, height: ringSize)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+    }
+}
+
+// MARK: - Weakness graph (obsidian-style node map)
+
+private struct WeaknessNode: Identifiable {
+    let id = UUID()
+    let name: String
+    let count: Int
+}
+
+private struct PlacedNode: Identifiable {
+    let id: UUID
+    let node: WeaknessNode
+    let point: CGPoint
+}
+
+private struct WeaknessGraphCard: View {
+    let nodes: [WeaknessNode]
+    private var maxCount: Int { max(1, nodes.map(\.count).max() ?? 1) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("your weak spots")
+                .font(.redactionItalic(size: 16))
+                .opacity(0.7)
+
+            GeometryReader { geo in
+                let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+                let radius = min(geo.size.width, geo.size.height) * 0.34
+                let placed = nodes.enumerated().map { idx, node in
+                    PlacedNode(id: node.id, node: node, point: position(idx, total: nodes.count, center: center, radius: radius))
+                }
+                ZStack {
+                    // edges
+                    ForEach(placed) { pn in
+                        Path { path in
+                            path.move(to: center)
+                            path.addLine(to: pn.point)
+                        }
+                        .stroke(.white.opacity(0.28), lineWidth: 1.2)
+                    }
+                    // central "you" node
+                    GraphNode(label: "you", count: nil, diameter: 50, fill: .white, textColor: Color.zenlyFog)
+                        .position(center)
+                    // weakness nodes
+                    ForEach(placed) { pn in
+                        GraphNode(
+                            label: WeaknessGraphCard.pretty(pn.node.name),
+                            count: pn.node.count,
+                            diameter: diameter(pn.node.count),
+                            fill: Color.zenlyDanger,
+                            textColor: .white
+                        )
+                        .position(pn.point)
+                    }
+                }
+            }
+            .frame(height: 250)
+
+            Text("bigger dot = caught more often")
+                .font(.redactionItalic(size: 13))
+                .opacity(0.55)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(Rectangle().stroke(.white.opacity(0.6), lineWidth: 1.3))
+    }
+
+    private func position(_ i: Int, total: Int, center: CGPoint, radius: CGFloat) -> CGPoint {
+        guard total > 0 else { return center }
+        let angle = (2 * Double.pi * Double(i) / Double(total)) - Double.pi / 2
+        return CGPoint(x: center.x + radius * CGFloat(cos(angle)),
+                       y: center.y + radius * CGFloat(sin(angle)))
+    }
+
+    private func diameter(_ count: Int) -> CGFloat {
+        let t = CGFloat(count) / CGFloat(maxCount)
+        return 34 + t * 30   // 34...64
+    }
+
+    static func pretty(_ raw: String) -> String {
+        switch raw {
+        case "instagram_reels": return "reels"
+        case "youtube_shorts":  return "shorts"
+        case "social_feed":     return "socials"
+        default:                return raw.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+}
+
+private struct GraphNode: View {
+    let label: String
+    let count: Int?
+    let diameter: CGFloat
+    let fill: Color
+    let textColor: Color
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                Circle().fill(fill)
+                Circle().stroke(.white, lineWidth: 1.5)
+                if let count {
+                    Text("\(count)")
+                        .font(.redaction(size: diameter * 0.34, weight: .bold))
+                        .foregroundStyle(textColor)
+                }
+            }
+            .frame(width: diameter, height: diameter)
+
+            Text(label)
+                .font(.redactionItalic(size: 13))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .fixedSize()
+        }
     }
 }
 
@@ -956,7 +1236,7 @@ private struct RecentVerdictsCard: View {
     private func verdictColor(_ status: String) -> Color {
         switch status {
         case "on_task", "ok": return .white
-        case "destructive":   return Color(red: 1, green: 0.35, blue: 0.35)
+        case "destructive":   return Color.zenlyDanger
         default:              return Color.zenlyFog
         }
     }

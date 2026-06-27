@@ -81,6 +81,10 @@ final class SessionStore {
     var contactPhone: String {
         didSet { defaults?.set(contactPhone, forKey: Keys.contactPhone) }
     }
+    /// Display-only name for the accountability contact (not sent to the backend).
+    var witnessName: String {
+        didSet { defaults?.set(witnessName, forKey: Keys.witnessName) }
+    }
 
     /// The user's own number, learned from the agent's deep link. Identifies us to `/judge`.
     var userPhone: String {
@@ -96,6 +100,7 @@ final class SessionStore {
         static let userName = "userName"
         static let interventionLevel = "interventionLevel"
         static let contactPhone = "contactPhone"
+        static let witnessName = "witnessName"
         static let userPhone = "userPhone"
         static let sessionActive = AppGroup.sessionActiveKey
         static let apiBaseURL = AppGroup.apiBaseURLKey
@@ -107,6 +112,7 @@ final class SessionStore {
         userName = d?.string(forKey: Keys.userName) ?? ""
         interventionLevel = stored.flatMap(InterventionLevel.init(rawValue:)) ?? .nudge
         contactPhone = d?.string(forKey: Keys.contactPhone) ?? ""
+        witnessName = d?.string(forKey: Keys.witnessName) ?? "Gabe"
         let storedPhone = d?.string(forKey: Keys.userPhone) ?? ""
         userPhone = storedPhone.isEmpty ? "+15715197392" : storedPhone
         // didSet doesn't fire in init — write explicitly so the broadcast extension can read it
