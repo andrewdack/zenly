@@ -24,13 +24,15 @@ const e164PhoneNumberSchema = z
 const sendMessageSchema = z
   .object({
     to: e164PhoneNumberSchema,
-    message: z.string().trim().min(1).max(1000)
+    message: z.string().trim().min(1).max(1000),
+    fromPhone: e164PhoneNumberSchema.optional()
   })
   .strict();
 
 export interface CreateAppOptions {
   focusProvider: VisionProvider;
   messageSender: MessageSender;
+  snitchAgentPhone?: string;
   openai: OpenAI;
   agentModel: string;
   snitchModel: string;
@@ -40,6 +42,7 @@ export interface CreateAppOptions {
 
 export function createApp(options: CreateAppOptions) {
   const { focusProvider, messageSender, openai, snitchModel, deeplinkScheme } = options;
+  const snitchAgentPhone = options.snitchAgentPhone ?? "+14156055823";
   const app = express();
   const upload = multer({
     storage: multer.memoryStorage(),
@@ -161,6 +164,7 @@ export function createApp(options: CreateAppOptions) {
     asyncHandler(async (req, res) => {
       const { userPhone, task, durationMinutes, mode, interventionLevel, contactPhone, name } = req.body ?? {};
       if (!userPhone) throw new HttpError(400, "userPhone is required", "missing_fields");
+      const phone = normalizePhoneTarget(String(userPhone));
 
       const resolvedMode: SessionMode = mode === "guardian" ? "guardian" : "task";
       if (resolvedMode === "task" && !task)
@@ -177,21 +181,21 @@ export function createApp(options: CreateAppOptions) {
       };
 
       // Explicit identity from the app keeps the profile in sync with the agent.
-      if (name) profile.upsertUser(String(userPhone), { name: String(name) });
+      if (name) profile.upsertUser(phone, { name: String(name) });
 
       const normalizedContact = contactPhone ? normalizePhoneTarget(String(contactPhone)) : null;
-      const session = sessions.startSession(String(userPhone), parsed, {
+      const session = sessions.startSession(phone, parsed, {
         interventionLevel: level,
         contactPhone: normalizedContact || null,
       });
-      res.json({ session, deeplink: startLink(deeplinkScheme, parsed, String(userPhone)) });
+      res.json({ session, deeplink: startLink(deeplinkScheme, parsed, phone) });
     })
   );
 
   app.get(
     "/session/:phone",
     asyncHandler(async (req, res) => {
-      const phone = String(req.params.phone);
+      const phone = normalizePhoneTarget(String(req.params.phone));
       const session = sessions.getSession(phone);
       if (!session) { res.json({ active: false }); return; }
       res.json({
@@ -208,17 +212,18 @@ export function createApp(options: CreateAppOptions) {
     asyncHandler(async (req, res) => {
       const userPhone = (req.body?.userPhone as string | undefined)?.trim();
       if (!userPhone) throw new HttpError(400, "userPhone is required", "missing_fields");
+      const phone = normalizePhoneTarget(userPhone);
 
-      const session = sessions.getSession(userPhone);
+      const session = sessions.getSession(phone);
 
       let memoriesAdded = 0;
       if (session) {
-        const verdicts = profile.verdictsSince(userPhone, session.startedAt);
-        const events = profile.eventsSince(userPhone, session.startedAt);
+        const verdicts = profile.verdictsSince(phone, session.startedAt);
+        const events = profile.eventsSince(phone, session.startedAt);
 
         if (verdicts.length > 0) {
           try {
-            const existingMemories = profile.getMemories(userPhone, 20);
+            const existingMemories = profile.getMemories(phone, 20);
             const completion = await openai.chat.completions.create({
               model: snitchModel,
               max_tokens: 300,
@@ -231,7 +236,7 @@ export function createApp(options: CreateAppOptions) {
             const parsed = JSON.parse(raw.replace(/^```json\n?|\n?```$/g, "")) as Array<{ kind: string; fact: string }>;
             for (const m of parsed) {
               if ((m.kind === "behavior" || m.kind === "preference") && typeof m.fact === "string") {
-                profile.addMemory(userPhone, m.kind, m.fact);
+                profile.addMemory(phone, m.kind, m.fact);
                 memoriesAdded++;
               }
             }
@@ -240,7 +245,7 @@ export function createApp(options: CreateAppOptions) {
           }
         }
 
-        sessions.endSession(userPhone);
+        sessions.endSession(phone);
       }
 
       res.json({ ended: true, memoriesAdded });
@@ -250,7 +255,7 @@ export function createApp(options: CreateAppOptions) {
   app.get(
     "/profile/:phone",
     asyncHandler(async (req, res) => {
-      const phone = String(req.params.phone);
+      const phone = normalizePhoneTarget(String(req.params.phone));
       const p = profile.getProfile(phone);
       const stats = profile.behaviorStats(phone);
       const recentVerdicts = profile.recentVerdicts(phone, 10);
@@ -269,8 +274,9 @@ export function createApp(options: CreateAppOptions) {
 
       const userPhone = (req.body.userPhone as string | undefined)?.trim();
       if (!userPhone) throw new HttpError(400, "userPhone form field is required", "missing_fields");
+      const phone = normalizePhoneTarget(userPhone);
 
-      const session = sessions.getSession(userPhone);
+      const session = sessions.getSession(phone);
       if (!session) throw new HttpError(409, "no active session for this user", "no_active_session");
 
       const verdict = await focusProvider.isFocused({
@@ -280,10 +286,10 @@ export function createApp(options: CreateAppOptions) {
         task: session.task,
       });
 
-      profile.logVerdict(userPhone, verdict.status, verdict.destructiveCategory, verdict.reason, session.mode);
+      profile.logVerdict(phone, verdict.status, verdict.destructiveCategory, verdict.reason, session.mode);
 
       const action = sessions.recordVerdict(
-        userPhone, verdict.status, verdict.reason, Date.now(),
+        phone, verdict.status, verdict.reason, Date.now(),
         watchConfigFromBody(req.body as Record<string, unknown>)
       );
 
@@ -291,11 +297,11 @@ export function createApp(options: CreateAppOptions) {
 
       if (action.type === "checkin") {
         const message = await generateCheckIn(session, action.reason);
-        sessions.appendTurn(userPhone, "assistant", message); // so their reply lands in context
-        profile.logEvent(userPhone, "checkin", message);
+        sessions.appendTurn(phone, "assistant", message); // so their reply lands in context
+        profile.logEvent(phone, "checkin", message);
         try {
-          await messageSender.sendMessage({ to: userPhone, message });
-          escalation = { sent: true, to: userPhone, message };
+          await messageSender.sendMessage({ to: phone, message });
+          escalation = { sent: true, to: phone, message };
         } catch (err) {
           console.error("[judge] check-in send failed:", err);
           escalation = { sent: false, message };
@@ -305,22 +311,22 @@ export function createApp(options: CreateAppOptions) {
           const contactPhone = normalizePhoneTarget(session.contactPhone);
           const message = await generateSnitchText(session.task ?? "staying off the bad apps", verdict.reason);
           try {
-            await messageSender.sendMessage({ to: contactPhone, message });
-            sessions.recordSnitch(userPhone);
-            profile.logEvent(userPhone, "snitch", message);
+            await messageSender.sendMessage({ to: contactPhone, message, fromPhone: snitchAgentPhone });
+            sessions.recordSnitch(phone);
+            profile.logEvent(phone, "snitch", message);
             escalation = { sent: true, to: contactPhone, message };
           } catch (err) {
             console.error("[judge] snitch send failed:", err);
             escalation = { sent: false, message };
           }
         } else if (action.level === "nudge") {
-          sessions.recordNudge(userPhone);
-          profile.logEvent(userPhone, "nudge", verdict.reason);
+          sessions.recordNudge(phone);
+          profile.logEvent(phone, "nudge", verdict.reason);
         }
         // nudge is applied on-device by the app from `action`; snitch is sent server-side.
       }
 
-      res.json({ verdict, action, escalation, stats: sessions.get(userPhone).stats });
+      res.json({ verdict, action, escalation, stats: sessions.get(phone).stats });
     })
   );
 
@@ -334,8 +340,8 @@ export function createApp(options: CreateAppOptions) {
 
       const normalizedContact = normalizePhoneTarget(String(contactPhone));
       const message = await generateSnitchText(task as string, screenContent as string);
-      const result = await messageSender.sendMessage({ to: normalizedContact, message });
-      if (userPhone) sessions.recordSnitch(userPhone as string);
+      const result = await messageSender.sendMessage({ to: normalizedContact, message, fromPhone: snitchAgentPhone });
+      if (userPhone) sessions.recordSnitch(normalizePhoneTarget(String(userPhone)));
       res.json({ message, ...result });
     })
   );

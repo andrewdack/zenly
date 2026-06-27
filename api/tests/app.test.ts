@@ -11,7 +11,7 @@ import * as sessions from "../src/store/sessions.js";
 afterAll(() => closeDb());
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeApp(options: { messageSender?: MessageSender; openai?: any; focusProvider?: VisionProvider } = {}) {
+function makeApp(options: { messageSender?: MessageSender; snitchAgentPhone?: string; openai?: any; focusProvider?: VisionProvider } = {}) {
   const focusProvider: VisionProvider = options.focusProvider ?? {
     isFocused: vi.fn(async () => ({
       status: "ok" as const,
@@ -37,6 +37,7 @@ function makeApp(options: { messageSender?: MessageSender; openai?: any; focusPr
   const app = createApp({
     focusProvider,
     messageSender,
+    snitchAgentPhone: options.snitchAgentPhone,
     openai: options.openai,
     maxImageBytes: 1024 * 1024
   });
@@ -136,6 +137,25 @@ describe("Zenly API", () => {
     });
     expect(messageSender.sendMessage).toHaveBeenCalledWith({
       to: "+15555555555",
+      message: "Time to lock in."
+    });
+  });
+
+  it("allows choosing a sender phone for multi-phone Photon projects", async () => {
+    const { app, messageSender } = makeApp();
+
+    await request(app)
+      .post("/sendMessage")
+      .send({
+        to: "+15715996273",
+        fromPhone: "+14156055823",
+        message: "Time to lock in."
+      })
+      .expect(200);
+
+    expect(messageSender.sendMessage).toHaveBeenCalledWith({
+      to: "+15715996273",
+      fromPhone: "+14156055823",
       message: "Time to lock in."
     });
   });
@@ -405,16 +425,33 @@ describe("Zenly API", () => {
     });
     expect(messageSender.sendMessage).toHaveBeenLastCalledWith({
       to: normalizedContactPhone,
-      message: "caught in 4k. lock in."
+      message: "caught in 4k. lock in.",
+      fromPhone: "+14156055823"
     });
   });
 
-  it("normalizes manual snitch contact phone numbers before sending", async () => {
+  it("canonicalizes composite user ids and routes witness snitches through the snitch agent phone", async () => {
+    const compositeAndrew = "any;-;+14156035536;-;+15715197392";
+    const andrewPhone = "+15715197392";
+    const witnessPhone = "+15715996273";
+    const snitchAgentPhone = "+14156055823";
+    const focusProvider: VisionProvider = {
+      isFocused: vi.fn(async () => ({
+        status: "destructive" as const,
+        isFocused: false,
+        destructiveCategory: "doomscrolling",
+        confidence: 0.95,
+        reason: "doomscrolling tiktok",
+        provider: "openrouter",
+        model: "test-model"
+      }))
+    };
     const messageSender: MessageSender = {
-      sendMessage: vi.fn(async ({ to }) => ({
+      sendMessage: vi.fn(async ({ to, fromPhone }) => ({
         provider: "photon" as const,
         platform: "imessage" as const,
         to,
+        fromPhone,
         messageId: `msg_${to}`,
         spaceId: `space_${to}`
       }))
@@ -428,7 +465,64 @@ describe("Zenly API", () => {
         }
       }
     };
-    const { app } = makeApp({ messageSender, openai });
+    const { app } = makeApp({ focusProvider, messageSender, snitchAgentPhone, openai });
+
+    const start = await request(app)
+      .post("/session/start")
+      .send({
+        userPhone: compositeAndrew,
+        mode: "guardian",
+        interventionLevel: "snitch",
+        contactPhone: "+1 (571) 599-6273"
+      })
+      .expect(200);
+
+    expect(start.body.session).toMatchObject({ interventionLevel: "snitch", contactPhone: witnessPhone });
+
+    const status = await request(app)
+      .get(`/session/${encodeURIComponent(andrewPhone)}`)
+      .expect(200);
+    expect(status.body.active).toBe(true);
+
+    const escalation = await request(app)
+      .post("/judge")
+      .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
+      .field("userPhone", compositeAndrew)
+      .field("checkInCooldownMs", "0")
+      .field("snitchAfter", "1")
+      .expect(200);
+
+    expect(escalation.body.action).toMatchObject({ type: "escalate", level: "snitch" });
+    expect(escalation.body.escalation).toMatchObject({ sent: true, to: witnessPhone });
+    expect(messageSender.sendMessage).toHaveBeenLastCalledWith({
+      to: witnessPhone,
+      message: "caught in 4k. lock in.",
+      fromPhone: snitchAgentPhone
+    });
+  });
+
+  it("normalizes manual snitch contact phone numbers before sending", async () => {
+    const snitchAgentPhone = "+14156055823";
+    const messageSender: MessageSender = {
+      sendMessage: vi.fn(async ({ to, fromPhone }) => ({
+        provider: "photon" as const,
+        platform: "imessage" as const,
+        to,
+        fromPhone,
+        messageId: `msg_${to}`,
+        spaceId: `space_${to}`
+      }))
+    };
+    const openai = {
+      chat: {
+        completions: {
+          create: vi.fn(async () => ({
+            choices: [{ message: { content: "caught in 4k. lock in." } }]
+          }))
+        }
+      }
+    };
+    const { app } = makeApp({ messageSender, snitchAgentPhone, openai });
 
     const response = await request(app)
       .post("/snitch")
@@ -442,7 +536,8 @@ describe("Zenly API", () => {
     expect(response.body.to).toBe("+15715996273");
     expect(messageSender.sendMessage).toHaveBeenCalledWith({
       to: "+15715996273",
-      message: "caught in 4k. lock in."
+      message: "caught in 4k. lock in.",
+      fromPhone: snitchAgentPhone
     });
   });
 });

@@ -120,7 +120,8 @@ export const openApiDocument = {
               },
               example: {
                 to: "+15555555555",
-                message: "Time to lock in."
+                message: "Time to lock in.",
+                fromPhone: "+14156035536"
               }
             }
           }
@@ -233,6 +234,12 @@ export const openApiDocument = {
             minLength: 1,
             maxLength: 1000,
             example: "Time to lock in."
+          },
+          fromPhone: {
+            type: "string",
+            pattern: "^\\+[1-9]\\d{1,14}$",
+            description: "Optional E.164 sender/agent phone for multi-phone Photon projects.",
+            example: "+14156035536"
           }
         }
       },
@@ -255,6 +262,10 @@ export const openApiDocument = {
           to: {
             type: "string",
             example: "+15555555555"
+          },
+          fromPhone: {
+            type: "string",
+            example: "+14156035536"
           },
           messageId: {
             type: "string",
