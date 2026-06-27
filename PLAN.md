@@ -75,8 +75,9 @@ window.**
 **Design:**
 - Add `checkInTimes: number[]` to the `Watch` interface (`types.ts`) and to
   `freshWatch()`. The `strikes`/`graceUntil` fields can be retired or repurposed.
-- New `WatchdogConfig`: `{ checkInCooldownMs: 90_000, windowMs: 600_000, snitchAfter: 3 }`
-  (tune later). Replace `DEFAULT_WATCHDOG.graceMs`.
+- New `WatchdogConfig`: `{ checkInCooldownMs: 30_000, windowMs: 300_000, snitchAfter: 3 }`.
+  **Use 30s cooldown — the demo wants this punchy** (3 check-ins ≈ ~90s of sustained
+  off-task before the snitch fires). Replace `DEFAULT_WATCHDOG.graceMs`.
 - Rewrite `step()`:
   1. Good verdict → `freshWatch()`, action `none`.
   2. Bad verdict → prune `checkInTimes` older than `windowMs`.
@@ -86,8 +87,8 @@ window.**
      escalated → emit `escalate` (level = `session.interventionLevel`), set
      `escalated`, and clear `checkInTimes` so it doesn't immediately re-fire.
   5. Otherwise → `waiting`.
-- This re-pings every ~90s while the user stays off task, snitching after the 3rd
-  ping (~3 min sustained), and also counts repeat in-and-out episodes within the
+- This re-pings every ~30s while the user stays off task, snitching after the 3rd
+  ping (~90s sustained), and also counts repeat in-and-out episodes within the
   window. Keep `escalated` as a fire-once guard; let a good verdict reset it.
 - Update `stats.checkIns` on each check-in (already happens in
   `store/sessions.ts recordVerdict`; keep it consistent).
@@ -96,8 +97,7 @@ window.**
 
 **Note:** escalation only actually snitches when the session is
 `interventionLevel: "snitch"` with a `contactPhone` (set from the app now). For the
-demo that contact must be a **verified Photon number**. Lower the timings if you
-want a faster demo (e.g. `checkInCooldownMs: 30_000`).
+demo that contact must be a **verified Photon number**.
 
 **Verify:** drive `POST /judge` repeatedly with an off-task frame (or unit-test
 `step()` directly — see existing tests). Confirm 3 check-ins → one escalate, and a
