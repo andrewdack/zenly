@@ -1,9 +1,19 @@
 import Foundation
 import Observation
+import UserNotifications
 
 enum AppGroup {
     static let identifier = "group.com.andrewh.zenly"
+    static let latestFrameFileName = "latest_frame.jpg"
+
     static var container: UserDefaults? { UserDefaults(suiteName: identifier) }
+    static var fileContainer: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier)
+    }
+
+    static var latestFrameURL: URL? {
+        fileContainer?.appendingPathComponent(latestFrameFileName)
+    }
 }
 
 enum InterventionLevel: String, CaseIterable, Identifiable {
@@ -47,12 +57,21 @@ struct FocusSession: Equatable {
     }
 }
 
+@MainActor
 @Observable
 final class SessionStore {
     var session: FocusSession?
     var onTask: Bool = true
     var nudgeCount: Int = 0
     var snitchCount: Int = 0
+    var judgeStatusText: String = "screen judge idle"
+    var lastJudgeReason: String = ""
+    var lastJudgeAction: String = "none"
+
+    @ObservationIgnored private let apiClient = ZenlyAPIClient()
+    @ObservationIgnored private var judgeTask: Task<Void, Never>?
+    @ObservationIgnored private var lastUploadedFrameModifiedAt: Date?
+    @ObservationIgnored private static let judgeIntervalNanoseconds: UInt64 = 5_000_000_000
 
     // Persistent user settings (configured in the app before texting the agent).
     var userName: String {
@@ -118,7 +137,153 @@ final class SessionStore {
         onTask = true
         nudgeCount = 0
         snitchCount = 0
+        lastJudgeReason = ""
+        lastJudgeAction = "none"
+        startJudgeLoop()
     }
 
-    func end() { session = nil }
+    func end() {
+        stopJudgeLoop()
+        session = nil
+        onTask = true
+        judgeStatusText = "screen judge idle"
+    }
+
+    private func startJudgeLoop() {
+        stopJudgeLoop()
+        lastUploadedFrameModifiedAt = nil
+        judgeStatusText = "start screen capture"
+        judgeTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.judgeLatestFrameIfReady()
+                try? await Task.sleep(nanoseconds: Self.judgeIntervalNanoseconds)
+            }
+        }
+    }
+
+    private func stopJudgeLoop() {
+        judgeTask?.cancel()
+        judgeTask = nil
+        lastUploadedFrameModifiedAt = nil
+    }
+
+    private func judgeLatestFrameIfReady() async {
+        guard let currentSession = session else {
+            stopJudgeLoop()
+            return
+        }
+
+        guard currentSession.isActive else {
+            end()
+            return
+        }
+
+        guard !userPhone.isEmpty else {
+            judgeStatusText = "waiting for session identity"
+            return
+        }
+
+        guard let frameURL = AppGroup.latestFrameURL else {
+            judgeStatusText = "app group unavailable"
+            return
+        }
+
+        guard FileManager.default.fileExists(atPath: frameURL.path) else {
+            judgeStatusText = "start screen capture"
+            return
+        }
+
+        let modifiedAt = ((try? FileManager.default.attributesOfItem(atPath: frameURL.path))?[.modificationDate] as? Date) ?? Date.distantPast
+        if let lastUploadedFrameModifiedAt, modifiedAt <= lastUploadedFrameModifiedAt { return }
+
+        let frameData: Data
+        do {
+            frameData = try Data(contentsOf: frameURL)
+        } catch {
+            judgeStatusText = "could not read frame"
+            lastJudgeReason = error.localizedDescription
+            return
+        }
+
+        guard !frameData.isEmpty else {
+            judgeStatusText = "empty frame"
+            return
+        }
+
+        judgeStatusText = "judging frame"
+        do {
+            let response = try await apiClient.judgeFrame(imageData: frameData, userPhone: userPhone)
+            lastUploadedFrameModifiedAt = modifiedAt
+            applyJudgeResponse(response)
+        } catch {
+            judgeStatusText = "judge upload failed"
+            lastJudgeReason = error.localizedDescription
+        }
+    }
+
+    private func applyJudgeResponse(_ response: JudgeResponse) {
+        switch response.verdict.status {
+        case "on_task", "ok":
+            onTask = true
+        default:
+            onTask = false
+        }
+
+        lastJudgeReason = response.verdict.reason
+        lastJudgeAction = response.action.type
+        judgeStatusText = statusCopy(for: response)
+
+        guard response.action.type == "escalate" else { return }
+        switch response.action.level?.lowercased() {
+        case "nudge":
+            nudgeCount += 1
+            sendLocalNudge(reason: response.action.reason ?? response.verdict.reason)
+        case "block":
+            judgeStatusText = "block requested — shield deferred"
+        case "snitch":
+            snitchCount += 1
+            judgeStatusText = "snitch sent server-side"
+        default:
+            break
+        }
+    }
+
+    private func statusCopy(for response: JudgeResponse) -> String {
+        switch response.action.type {
+        case "checkin":
+            return "check-in sent"
+        case "waiting":
+            return "grace window active"
+        case "escalate":
+            return "escalating \(response.action.level ?? interventionLevel.label)"
+        default:
+            switch response.verdict.status {
+            case "on_task": return "on task"
+            case "off_task": return "off task"
+            case "destructive": return "destructive pattern"
+            case "ok": return "guardian ok"
+            default: return response.verdict.status
+            }
+        }
+    }
+
+    private func sendLocalNudge(reason: String) {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+
+            let content = UNMutableNotificationContent()
+            content.title = "Zenly"
+            content.body = "lock back in — \(reason)"
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: "zenly-nudge-\(UUID().uuidString)",
+                content: content,
+                trigger: nil
+            )
+            center.add(request)
+        }
+    }
 }
+

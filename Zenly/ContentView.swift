@@ -1,7 +1,15 @@
 import SwiftUI
+#if canImport(ReplayKit) && canImport(UIKit)
+import ReplayKit
+import UIKit
+#endif
 
 /// The Zenly agent's Photon/Spectrum iMessage number. Text this to start a session.
 let MAC_IMESSAGE_HANDLE = "+14156035536"
+/// Demo API base URL. Phone must be on the same Wi-Fi as this Mac.
+let API_BASE_URL = URL(string: "http://192.168.7.29:3001")!
+/// ReplayKit upload extension bundle id.
+let BROADCAST_EXTENSION_BUNDLE_IDENTIFIER = "andrew.Zenly.ZenlyBroadcast"
 
 struct ContentView: View {
     @Environment(SessionStore.self) private var store
@@ -302,6 +310,12 @@ private struct RunningSessionView: View {
             }
             .padding(.top, 22)
 
+            BroadcastStartCard()
+                .padding(.top, 20)
+
+            JudgeStatusCard()
+                .padding(.top, 12)
+
             Spacer()
 
             HStack(spacing: 16) {
@@ -325,6 +339,75 @@ private struct RunningSessionView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+
+private struct BroadcastStartCard: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            BroadcastPickerButton()
+                .frame(width: 46, height: 46)
+                .overlay(Rectangle().stroke(.white, lineWidth: 1.6))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("start screen capture")
+                    .font(.redaction(size: 22, weight: .bold))
+                Text("tap once after the session starts")
+                    .font(.redactionItalic(size: 15))
+                    .opacity(0.72)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .overlay(Rectangle().stroke(.white.opacity(0.78), lineWidth: 1.4))
+    }
+}
+
+private struct JudgeStatusCard: View {
+    @Environment(SessionStore.self) private var store
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SummaryRow(key: "judge", value: store.judgeStatusText)
+            if !store.userPhone.isEmpty {
+                SummaryRow(key: "phone", value: store.userPhone)
+            }
+            if !store.lastJudgeReason.isEmpty {
+                Text(store.lastJudgeReason)
+                    .font(.redactionItalic(size: 15))
+                    .lineLimit(2)
+                    .opacity(0.72)
+            }
+        }
+        .padding(14)
+        .overlay(Rectangle().stroke(.white.opacity(0.55), lineWidth: 1.2))
+    }
+}
+
+#if canImport(ReplayKit) && canImport(UIKit)
+private struct BroadcastPickerButton: UIViewRepresentable {
+    func makeUIView(context: Context) -> RPSystemBroadcastPickerView {
+        let picker = RPSystemBroadcastPickerView(frame: .zero)
+        picker.preferredExtension = BROADCAST_EXTENSION_BUNDLE_IDENTIFIER
+        picker.showsMicrophoneButton = false
+        picker.tintColor = .white
+        return picker
+    }
+
+    func updateUIView(_ uiView: RPSystemBroadcastPickerView, context: Context) {
+        uiView.preferredExtension = BROADCAST_EXTENSION_BUNDLE_IDENTIFIER
+        uiView.showsMicrophoneButton = false
+        uiView.tintColor = .white
+    }
+}
+#else
+private struct BroadcastPickerButton: View {
+    var body: some View {
+        Text("◉")
+            .font(.redaction(size: 28, weight: .bold))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+#endif
 
 /// Live countdown for timed sessions (with a brutalist progress bar), elapsed for indefinite.
 private struct TimerBlock: View {
