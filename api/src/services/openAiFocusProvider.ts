@@ -1,10 +1,12 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import { HttpError } from "../http.js";
+import { focusJudgeSystem } from "../prompts.js";
 import type { FocusImageInput, FocusResult, VisionProvider } from "./visionProvider.js";
 
 const focusResponseSchema = z.object({
-  isFocused: z.boolean(),
+  status: z.enum(["on_task", "off_task", "destructive", "ok"]),
+  destructiveCategory: z.string().nullish(),
   confidence: z.number().min(0).max(1),
   reason: z.string().min(1).max(500)
 });
@@ -57,16 +59,14 @@ export class OpenAiFocusProvider implements VisionProvider {
       messages: [
         {
           role: "system",
-          content:
-            "You classify whether a person appears focused from a single image. Return only JSON with isFocused, confidence, and reason. Focused means visually engaged with the computer/task; distracted means away, phone, sleeping, obviously off-task, or no person visible. Be conservative when uncertain."
+          content: focusJudgeSystem(input.mode, input.task ?? null)
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text:
-                "Analyze this frame from a focus/accountability app. Respond as JSON: {\"isFocused\": boolean, \"confidence\": number between 0 and 1, \"reason\": short string}."
+              text: "analyze this frame and respond with only the json described above."
             },
             {
               type: "image_url",
@@ -90,8 +90,13 @@ export class OpenAiFocusProvider implements VisionProvider {
       throw new HttpError(502, "Focus provider returned an invalid response", "focus_provider_invalid_response");
     }
 
+    const { status, confidence, reason } = parsed.data;
     return {
-      ...parsed.data,
+      status,
+      isFocused: status === "on_task" || status === "ok",
+      destructiveCategory: parsed.data.destructiveCategory ?? null,
+      confidence,
+      reason,
       provider: this.providerName,
       model: this.model
     };

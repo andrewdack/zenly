@@ -1,11 +1,16 @@
+import type { FocusStatus, SessionMode } from "../types.js";
+
 export interface FocusImageInput {
   image: Buffer;
   mimeType: string;
-  task?: string;
+  mode: SessionMode;
+  task?: string | null;
 }
 
 export interface FocusResult {
-  isFocused: boolean;
+  status: FocusStatus;
+  isFocused: boolean;                 // derived: on_task | ok
+  destructiveCategory: string | null; // social | games | gambling | other | null
   confidence: number;
   reason: string;
   provider: string;

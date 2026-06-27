@@ -7,7 +7,9 @@ import type { VisionProvider } from "../src/services/visionProvider.js";
 function makeApp(options: { messageSender?: MessageSender } = {}) {
   const focusProvider: VisionProvider = {
     isFocused: vi.fn(async () => ({
+      status: "ok" as const,
       isFocused: true,
+      destructiveCategory: null,
       confidence: 0.92,
       reason: "Person appears engaged with the screen.",
       provider: "openrouter",
@@ -67,7 +69,9 @@ describe("Zenly API", () => {
       .expect(200);
 
     expect(response.body).toEqual({
+      status: "ok",
       isFocused: true,
+      destructiveCategory: null,
       confidence: 0.92,
       reason: "Person appears engaged with the screen.",
       provider: "openrouter",
@@ -75,7 +79,9 @@ describe("Zenly API", () => {
     });
     expect(focusProvider.isFocused).toHaveBeenCalledWith({
       image: expect.any(Buffer),
-      mimeType: "image/png"
+      mimeType: "image/png",
+      mode: "guardian",
+      task: undefined
     });
   });
 

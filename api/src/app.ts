@@ -6,10 +6,13 @@ import { asyncHandler, HttpError } from "./http.js";
 import { openApiDocument, swaggerHtml } from "./openapi.js";
 import type { MessageSender } from "./services/messageSender.js";
 import type { VisionProvider } from "./services/visionProvider.js";
-import { SNITCH_SYSTEM, snitchPrompt } from "./prompts.js";
+import { CHECKIN_SYSTEM, checkInPrompt, SNITCH_SYSTEM, snitchPrompt } from "./prompts.js";
 import * as sessions from "./store/sessions.js";
 import { startLink } from "./util/deeplink.js";
+import type { InterventionLevel, Session, SessionMode } from "./types.js";
 import type OpenAI from "openai";
+
+const INTERVENTION_LEVELS: InterventionLevel[] = ["nudge", "block", "snitch"];
 
 const e164PhoneNumberSchema = z
   .string()
@@ -70,10 +73,12 @@ export function createApp(options: CreateAppOptions) {
         throw new HttpError(400, "uploaded file must be an image", "invalid_image_type");
       }
 
+      const task = (req.body.task as string | undefined) || undefined;
       const result = await focusProvider.isFocused({
         image: req.file.buffer,
         mimeType: req.file.mimetype,
-        task: req.body.task as string | undefined,
+        mode: task ? "task" : "guardian",
+        task,
       });
 
       res.json(result);
@@ -89,16 +94,65 @@ export function createApp(options: CreateAppOptions) {
     })
   );
 
+  // ── LLM text helpers (shared by /judge and /snitch) ────────────────────────
+  async function generateSnitchText(task: string, screenContent: string): Promise<string> {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: snitchModel,
+        max_tokens: 120,
+        messages: [
+          { role: "system", content: SNITCH_SYSTEM },
+          { role: "user", content: snitchPrompt(task, screenContent) },
+        ],
+      });
+      const message = completion.choices[0]?.message?.content?.trim();
+      if (message) return message;
+    } catch { /* fall through to default */ }
+    return `your friend swore they'd be "${task}" but got caught ${screenContent}. just so you know 👀`;
+  }
+
+  async function generateCheckIn(session: Session, reason: string): Promise<string> {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: snitchModel,
+        max_tokens: 100,
+        messages: [
+          { role: "system", content: CHECKIN_SYSTEM },
+          { role: "user", content: checkInPrompt(session, reason) },
+        ],
+      });
+      const message = completion.choices[0]?.message?.content?.trim();
+      if (message) return message;
+    } catch { /* fall through to default */ }
+    return "hey — noticed you drifted off. everything good? lock back in for me 👀";
+  }
+
   // ── Sessions ──────────────────────────────────────────────────────────────
   app.post(
     "/session/start",
     asyncHandler(async (req, res) => {
-      const { userPhone, task, durationMinutes } = req.body ?? {};
-      if (!userPhone || !task)
-        throw new HttpError(400, "userPhone and task are required", "missing_fields");
+      const { userPhone, task, durationMinutes, mode, interventionLevel, contactPhone } = req.body ?? {};
+      if (!userPhone) throw new HttpError(400, "userPhone is required", "missing_fields");
+
+      const resolvedMode: SessionMode = mode === "guardian" ? "guardian" : "task";
+      if (resolvedMode === "task" && !task)
+        throw new HttpError(400, "task is required for a task session", "missing_fields");
+
+      const level: InterventionLevel = INTERVENTION_LEVELS.includes(interventionLevel as InterventionLevel)
+        ? (interventionLevel as InterventionLevel)
+        : "nudge";
       const mins = durationMinutes ? parseInt(String(durationMinutes), 10) : null;
-      const session = sessions.startSession(String(userPhone), { task: String(task), durationMinutes: mins });
-      res.json({ session, deeplink: startLink(deeplinkScheme, { task: String(task), durationMinutes: mins }) });
+      const parsed = {
+        mode: resolvedMode,
+        task: resolvedMode === "guardian" ? null : String(task),
+        durationMinutes: resolvedMode === "guardian" ? null : mins,
+      };
+
+      const session = sessions.startSession(String(userPhone), parsed, {
+        interventionLevel: level,
+        contactPhone: contactPhone ? String(contactPhone) : null,
+      });
+      res.json({ session, deeplink: startLink(deeplinkScheme, parsed) });
     })
   );
 
@@ -112,12 +166,73 @@ export function createApp(options: CreateAppOptions) {
         active: true,
         session,
         stats: sessions.get(phone).stats,
-        deeplink: startLink(deeplinkScheme, { task: session.task, durationMinutes: session.durationMinutes }),
+        deeplink: startLink(deeplinkScheme, session),
       });
     })
   );
 
-  // ── Snitch ────────────────────────────────────────────────────────────────
+  // ── Judge (stateful watchdog: judge → check-in → escalate) ──────────────────
+  app.post(
+    "/judge",
+    upload.single("image"),
+    asyncHandler(async (req, res) => {
+      if (!req.file) throw new HttpError(400, "multipart image field is required", "image_required");
+      if (!req.file.mimetype.startsWith("image/"))
+        throw new HttpError(400, "uploaded file must be an image", "invalid_image_type");
+
+      const userPhone = (req.body.userPhone as string | undefined)?.trim();
+      if (!userPhone) throw new HttpError(400, "userPhone form field is required", "missing_fields");
+
+      const session = sessions.getSession(userPhone);
+      if (!session) throw new HttpError(409, "no active session for this user", "no_active_session");
+
+      const verdict = await focusProvider.isFocused({
+        image: req.file.buffer,
+        mimeType: req.file.mimetype,
+        mode: session.mode,
+        task: session.task,
+      });
+
+      const graceMs = req.body.graceMs ? Number(req.body.graceMs) : undefined;
+      const action = sessions.recordVerdict(
+        userPhone, verdict.status, verdict.reason, Date.now(),
+        graceMs && Number.isFinite(graceMs) ? { graceMs } : undefined
+      );
+
+      let escalation: { sent: boolean; to?: string; message?: string } = { sent: false };
+
+      if (action.type === "checkin") {
+        const message = await generateCheckIn(session, action.reason);
+        sessions.appendTurn(userPhone, "assistant", message); // so their reply lands in context
+        try {
+          await messageSender.sendMessage({ to: userPhone, message });
+          escalation = { sent: true, to: userPhone, message };
+        } catch (err) {
+          console.error("[judge] check-in send failed:", err);
+          escalation = { sent: false, message };
+        }
+      } else if (action.type === "escalate") {
+        if (action.level === "snitch" && session.contactPhone) {
+          const message = await generateSnitchText(session.task ?? "staying off the bad apps", verdict.reason);
+          try {
+            await messageSender.sendMessage({ to: session.contactPhone, message });
+            sessions.recordSnitch(userPhone);
+            escalation = { sent: true, to: session.contactPhone, message };
+          } catch (err) {
+            console.error("[judge] snitch send failed:", err);
+            escalation = { sent: false, message };
+          }
+        } else if (action.level === "nudge") {
+          sessions.recordNudge(userPhone);
+        }
+        // nudge + block are applied on-device by the app from `action`.
+      }
+
+      res.json({ verdict, action, escalation, stats: sessions.get(userPhone).stats });
+    })
+  );
+
+  // ── Snitch (manual trigger) ─────────────────────────────────────────────────
   app.post(
     "/snitch",
     asyncHandler(async (req, res) => {
@@ -125,23 +240,7 @@ export function createApp(options: CreateAppOptions) {
       if (!task || !contactPhone || !screenContent)
         throw new HttpError(400, "task, contactPhone, and screenContent are required", "missing_fields");
 
-      let message: string;
-      try {
-        const completion = await openai.chat.completions.create({
-          model: snitchModel,
-          max_tokens: 120,
-          messages: [
-            { role: "system", content: SNITCH_SYSTEM },
-            { role: "user", content: snitchPrompt(task as string, screenContent as string) },
-          ],
-        });
-        message = completion.choices[0]?.message?.content?.trim() ?? "";
-      } catch { message = ""; }
-
-      if (!message) {
-        message = `your friend swore they'd be "${task}" but got caught ${screenContent}. just so you know 👀`;
-      }
-
+      const message = await generateSnitchText(task as string, screenContent as string);
       const result = await messageSender.sendMessage({ to: contactPhone as string, message });
       if (userPhone) sessions.recordSnitch(userPhone as string);
       res.json({ message, ...result });

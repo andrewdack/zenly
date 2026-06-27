@@ -13,8 +13,12 @@ function parseSessionBlock(text: string): { reply: string; session: ParsedSessio
   let session: ParsedSession | null = null;
   try {
     const raw = JSON.parse(match[1].trim()) as Record<string, unknown>;
-    if (raw.task) {
+    const mode = raw.mode === "guardian" ? "guardian" : "task";
+    if (mode === "guardian") {
+      session = { mode, task: null, durationMinutes: null };
+    } else if (raw.task) {
       session = {
+        mode,
         task: String(raw.task),
         durationMinutes: raw.duration_minutes != null ? parseInt(String(raw.duration_minutes), 10) : null,
       };

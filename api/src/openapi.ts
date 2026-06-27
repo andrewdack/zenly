@@ -180,8 +180,19 @@ export const openApiDocument = {
     schemas: {
       FocusResponse: {
         type: "object",
-        required: ["isFocused", "confidence", "reason", "provider", "model"],
+        required: ["status", "isFocused", "confidence", "reason", "provider", "model"],
         properties: {
+          status: {
+            type: "string",
+            enum: ["on_task", "off_task", "destructive", "ok"],
+            example: "destructive"
+          },
+          destructiveCategory: {
+            type: "string",
+            nullable: true,
+            enum: ["social", "games", "gambling", "other", null],
+            example: "social"
+          },
           isFocused: {
             type: "boolean",
             example: false
