@@ -188,6 +188,37 @@ app applies nudge/block locally from `action`; snitch is sent server-side.
 
 Inbound messages arrive via the local iMessage watcher, not HTTP.
 
+## ReplayKit → Messages: full data flow & what's left
+
+The end-to-end loop and its current state:
+
+```
+ReplayKit broadcast ──✅──> latest_frame.jpg in App Group  (ZenlyBroadcast/SampleHandler.swift, ~1fps)
+   app starts broadcast ──❌──  no RPSystemBroadcastPickerView yet
+   app reads frame + uploads ──❌──  no API client / frame loop yet
+POST /judge ──✅──> watchdog ──✅──> check-in / snitch via Photon ──✅──> user's Messages
+   app applies nudge/block from `action` ──❌──  no on-device handling yet
+```
+
+Remaining work to close the loop (all app-side; the backend is done & testable via curl):
+
+1. **Start the broadcast** — add `RPSystemBroadcastPickerView` (preferredExtension = ZenlyBroadcast)
+   on the running-session screen so the user begins screen capture when the session starts.
+2. **Carry the user's identity in the deeplink** — `/judge` keys sessions by `userPhone`, but the app
+   has no way to know the user's own number. The agent knows `from`, so `startLink()` must append
+   `&phone=<from>` (or a `sid` token); `SessionStore.handle(url:)` parses + stores it. **Blocking** —
+   without this the app can't tell `/judge` who it is.
+3. **API client** — `URLSession` layer + a base-URL config (Mac LAN IP for demo, or a deployed
+   `api/` URL). Add an `API_BASE_URL` constant next to `MAC_IMESSAGE_HANDLE`.
+4. **Frame loop (Phase 6)** — timer (every ~3–5s while a session is active) reads `latest_frame.jpg`
+   from the App Group, multipart-POSTs it to `/judge` with `userPhone`, decodes `{ verdict, action }`.
+5. **Apply the result on-device** — set `store.onTask` from `verdict.status` (live UI), and on
+   `action.type == "escalate"`: `nudge` → local `UNUserNotification` (request permission first);
+   `block` → ManagedSettings shield (Phase 7, **PAID**); `snitch` → already sent by backend.
+6. **Infra** — phone must reach the `api/` base URL (same Wi-Fi as the Mac, or deploy); Photon
+   allowlist must include the user's number + the contact; ReplayKit needs a **physical device**
+   (the simulator can't broadcast).
+
 ## Conventions / gotchas
 
 - **OpenRouter for everything** — one API key, configure `FOCUS_MODEL` and `AGENT_MODEL` independently.
