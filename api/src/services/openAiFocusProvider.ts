@@ -33,21 +33,21 @@ export class OpenAiFocusProvider implements VisionProvider {
 
   constructor(options: OpenAiFocusProviderOptions) {
     if (!options.apiKey && !options.client) {
-      console.warn("[focus] OPENROUTER_API_KEY not set — /isFocused will return errors.");
+      throw new Error("OPENROUTER_API_KEY is required for focus checks");
     }
+
     this.model = options.model;
     this.providerName = options.providerName ?? "openrouter";
     this.client =
       options.client ??
-      new OpenAI({ apiKey: options.apiKey ?? "not-configured", baseURL: options.baseURL });
+      new OpenAI({
+        apiKey: options.apiKey,
+        baseURL: options.baseURL
+      });
   }
 
   async isFocused(input: FocusImageInput): Promise<FocusResult> {
     const imageUrl = `data:${input.mimeType};base64,${input.image.toString("base64")}`;
-
-    const userPrompt = input.task
-      ? `The user's goal is: "${input.task}". Analyze this screenshot and judge whether they are working toward that goal. Respond as JSON: {"isFocused": boolean, "confidence": number between 0 and 1, "reason": short string}.`
-      : `Analyze this frame from a focus/accountability app. Respond as JSON: {"isFocused": boolean, "confidence": number between 0 and 1, "reason": short string}.`;
 
     const completion = await this.client.chat.completions.create({
       model: this.model,
@@ -58,13 +58,23 @@ export class OpenAiFocusProvider implements VisionProvider {
         {
           role: "system",
           content:
-            "You classify whether a person appears focused on their stated task from a screenshot. Return only JSON with isFocused, confidence, and reason. Be conservative when uncertain."
+            "You classify whether a person appears focused from a single image. Return only JSON with isFocused, confidence, and reason. Focused means visually engaged with the computer/task; distracted means away, phone, sleeping, obviously off-task, or no person visible. Be conservative when uncertain."
         },
         {
           role: "user",
           content: [
-            { type: "text", text: userPrompt },
-            { type: "image_url", image_url: { url: imageUrl, detail: "low" } }
+            {
+              type: "text",
+              text:
+                "Analyze this frame from a focus/accountability app. Respond as JSON: {\"isFocused\": boolean, \"confidence\": number between 0 and 1, \"reason\": short string}."
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: imageUrl,
+                detail: "low"
+              }
+            }
           ]
         }
       ]
@@ -80,6 +90,10 @@ export class OpenAiFocusProvider implements VisionProvider {
       throw new HttpError(502, "Focus provider returned an invalid response", "focus_provider_invalid_response");
     }
 
-    return { ...parsed.data, provider: this.providerName, model: this.model };
+    return {
+      ...parsed.data,
+      provider: this.providerName,
+      model: this.model
+    };
   }
 }
