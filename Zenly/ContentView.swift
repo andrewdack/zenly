@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The Zenly agent's Photon/Spectrum iMessage number. Text this to start a session.
-let MAC_IMESSAGE_HANDLE = "4156055838"
+let MAC_IMESSAGE_HANDLE = "+14156035536"
 
 struct ContentView: View {
     @Environment(SessionStore.self) private var store

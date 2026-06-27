@@ -5,7 +5,7 @@ Intent-aware distraction blocker with a conversational iMessage agent.
 **User flow:**
 1. First launch: user configures intervention level (nudge / block / snitch) and accountability
    contact in the app. This is a one-time setup.
-2. To start a session: user iMessages the agent (`4156055838`). The agent collects either a
+2. To start a session: user iMessages the agent (`+14156035536`). The agent collects either a
    **task** (focus session, optional duration) **or** starts **guardian mode** (no task — just
    watching for self-destructive behavior). Agent replies with a deep link.
 3. User taps the deep link → iOS app starts the session (task or guardian).
@@ -118,9 +118,9 @@ TypeScript + Node + Express. **`api/` is the only server** (the old `backend/` r
 implementation has been removed).
 
 **Agent number**: the Zenly agent runs on **Photon/Spectrum** at iMessage number
-**`4156055838`** — this is what users text to start a session. It's hardcoded in the iOS app as
+**`+14156035536`** — this is what users text to start a session. It's hardcoded in the iOS app as
 `MAC_IMESSAGE_HANDLE` in `Zenly/ContentView.swift` (the "text the agent" button opens
-`sms:4156055838`). No local Mac is required for Photon mode.
+`sms:+14156035536`). No local Mac is required for Photon mode.
 
 **LLM**: everything goes through **OpenRouter** (OpenAI-compatible) — one `OPENROUTER_API_KEY`
 covers both vision (focus judge) and agent chat. Model is configurable per role.
