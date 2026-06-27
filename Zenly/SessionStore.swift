@@ -107,7 +107,10 @@ final class SessionStore {
         userName = d?.string(forKey: Keys.userName) ?? ""
         interventionLevel = stored.flatMap(InterventionLevel.init(rawValue:)) ?? .nudge
         contactPhone = d?.string(forKey: Keys.contactPhone) ?? ""
-        userPhone = d?.string(forKey: Keys.userPhone) ?? ""
+        let storedPhone = d?.string(forKey: Keys.userPhone) ?? ""
+        userPhone = storedPhone.isEmpty ? "+15715197392" : storedPhone
+        // didSet doesn't fire in init — write explicitly so the broadcast extension can read it
+        if storedPhone.isEmpty { d?.set(userPhone, forKey: Keys.userPhone) }
         defaults?.set(API_BASE_URL.absoluteString, forKey: Keys.apiBaseURL)
         setBroadcastSessionActive(false)
     }
@@ -198,11 +201,9 @@ final class SessionStore {
         do {
             let response = try await apiClient.fetchSession(userPhone: userPhone)
             guard response.active else {
-                stopJudgeLoop()
-                setBroadcastSessionActive(false)
-                session = nil
-                onTask = true
-                judgeStatusText = "screen judge idle"
+                // Backend has no session — re-register ours (e.g. after a server restart).
+                syncSessionWithBackend(mode: currentSession.mode, task: currentSession.task, durationMinutes: currentSession.durationMinutes)
+                judgeStatusText = "re-syncing session..."
                 return
             }
 

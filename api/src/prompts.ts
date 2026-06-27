@@ -26,10 +26,11 @@ if a session is already going and they ask how it's going, use the stats the ser
 
 CHECK-INS: sometimes the server will have already texted them a check-in because they got caught slipping. if they reply explaining themselves or owning it, be a supportive friend — hear them out, no lecture. you can't actually call off the escalation (that's behavior-based, the server decides), but if they say they'll lock back in, hype them up.`;
 
-export const SNITCH_SYSTEM = `write a short, funny, slightly embarrassing text to send to someone's accountability buddy. max 2 sentences. keep it playful and lowercase — like a friend roasting them, not a hall monitor. output only the message, no quotes, no intro.`;
+export const SNITCH_SYSTEM = `write a short, funny, slightly embarrassing text to send to someone's accountability buddy letting them know their friend fell off. address the message TO the buddy, not to the person who slipped — the buddy needs to check in on them. max 2 sentences. playful and lowercase, like a group chat roast. output only the message, no quotes, no intro.`;
 
-export function snitchPrompt(task: string, screenContent: string): string {
-  return `someone was supposed to be working on "${task}" but got caught ${screenContent}. write the text to their accountability buddy.`;
+export function snitchPrompt(task: string, screenContent: string, userName?: string): string {
+  const name = userName?.trim() || "your friend";
+  return `${name} said they would focus on "${task}" but got caught ${screenContent}. write the text to their accountability buddy telling them to check in on ${name} and hold them accountable.`;
 }
 
 // ── Vision focus judge ───────────────────────────────────────────────────────

@@ -120,7 +120,7 @@ private struct HomeScreen: View {
                 .tracking(-1.2)
                 .padding(.top, 8)
 
-            Text("text us to start a focus session.\nwe send back a link that kicks it off.")
+            Text("text Zenly to define your goals and click the link to start.")
                 .font(.redactionItalic(size: 20))
                 .lineSpacing(3)
                 .opacity(0.82)
@@ -262,6 +262,13 @@ private struct SettingsScreen: View {
             NameField(text: $store.userName)
                 .padding(.top, 10)
 
+            Text("your phone")
+                .font(.redactionItalic(size: 18))
+                .opacity(0.7)
+                .padding(.top, 26)
+            PhoneField(text: $store.userPhone)
+                .padding(.top, 10)
+
             Text("witness")
                 .font(.redactionItalic(size: 18))
                 .opacity(0.7)
@@ -326,7 +333,7 @@ private struct SettingsScreen: View {
         if trimmed.isEmpty {
             return "example: +1 (415) 555-0123"
         }
-        return "will text \(DisplayFormat.phone(trimmed)) if you wander off."
+        return "will text \(DisplayFormat.phone(trimmed)) if you doomscroll or get distracted."
     }
 
     private func finishSettings() {
@@ -790,9 +797,9 @@ private extension InterventionLevel {
     var detail: String {
         switch self {
         case .nudge:
-            return "gentle pressure. we remind you before you drift."
+            return "gentle pressure and reminders to get back on task."
         case .snitch:
-            return "accountability with teeth. wander off and someone hears about it."
+            return "stay accountable or else someone else will hear about it..."
         }
     }
 }

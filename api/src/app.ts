@@ -101,14 +101,14 @@ export function createApp(options: CreateAppOptions) {
   );
 
   // ── LLM text helpers (shared by /judge and /snitch) ────────────────────────
-  async function generateSnitchText(task: string, screenContent: string): Promise<string> {
+  async function generateSnitchText(task: string, screenContent: string, userName?: string): Promise<string> {
     try {
       const completion = await openai.chat.completions.create({
         model: snitchModel,
         max_tokens: 120,
         messages: [
           { role: "system", content: SNITCH_SYSTEM },
-          { role: "user", content: snitchPrompt(task, screenContent) },
+          { role: "user", content: snitchPrompt(task, screenContent, userName) },
         ],
       });
       const message = completion.choices[0]?.message?.content?.trim();
@@ -309,7 +309,8 @@ export function createApp(options: CreateAppOptions) {
       } else if (action.type === "escalate") {
         if (action.level === "snitch" && session.contactPhone) {
           const contactPhone = normalizePhoneTarget(session.contactPhone);
-          const message = await generateSnitchText(session.task ?? "staying off the bad apps", verdict.reason);
+          const userName = profile.getProfile(phone).name ?? undefined;
+          const message = await generateSnitchText(session.task ?? "staying off the bad apps", verdict.reason, userName);
           try {
             await messageSender.sendMessage({ to: contactPhone, message, fromPhone: snitchAgentPhone });
             sessions.recordSnitch(phone);
@@ -339,9 +340,11 @@ export function createApp(options: CreateAppOptions) {
         throw new HttpError(400, "task, contactPhone, and screenContent are required", "missing_fields");
 
       const normalizedContact = normalizePhoneTarget(String(contactPhone));
-      const message = await generateSnitchText(task as string, screenContent as string);
+      const normalizedUser = userPhone ? normalizePhoneTarget(String(userPhone)) : null;
+      const userName = normalizedUser ? (profile.getProfile(normalizedUser).name ?? undefined) : undefined;
+      const message = await generateSnitchText(task as string, screenContent as string, userName);
       const result = await messageSender.sendMessage({ to: normalizedContact, message, fromPhone: snitchAgentPhone });
-      if (userPhone) sessions.recordSnitch(normalizePhoneTarget(String(userPhone)));
+      if (normalizedUser) sessions.recordSnitch(normalizedUser);
       res.json({ message, ...result });
     })
   );

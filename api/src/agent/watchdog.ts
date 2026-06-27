@@ -11,9 +11,9 @@ export interface WatchdogConfig {
 }
 
 export const DEFAULT_WATCHDOG: WatchdogConfig = {
-  checkInCooldownMs: 30_000,
+  checkInCooldownMs: 10_000,
   windowMs: 300_000,
-  snitchAfter: 3
+  snitchAfter: 2
 };
 
 export type WatchdogAction =
