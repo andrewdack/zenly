@@ -147,7 +147,9 @@ api/src/types.ts                        # shared TS types (Session/mode, FocusSt
 api/src/prompts.ts                      # agent + snitch + focus-judge (task/guardian) + check-in prompts
 api/src/agent/handler.ts               # createAgentHandler() — stateful conversation loop (parses mode)
 api/src/agent/watchdog.ts              # pure grace-window reducer: good→reset, slip→check-in→escalate
-api/src/store/sessions.ts              # per-phone session + watch state; recordVerdict() runs the watchdog
+api/src/store/sessions.ts              # per-phone LIVE session + watch state (in-memory, ephemeral)
+api/src/store/db.ts                    # better-sqlite3 singleton + migrations (durable store)
+api/src/store/profile.ts              # users/memories/verdicts/events — name, prefs, behavior memory
 api/src/util/deeplink.ts               # startLink() — %20 encoding (NOT "+")
 api/src/services/visionProvider.ts     # VisionProvider interface
 api/src/services/openAiFocusProvider.ts # OpenRouter vision implementation
@@ -187,6 +189,23 @@ npm run dev            # tsx watch src/index.ts   (Spectrum message loop only)
 app applies nudge/block locally from `action`; snitch is sent server-side.
 
 Inbound messages arrive via the local iMessage watcher, not HTTP.
+
+## User identity & memory (SQLite)
+
+Durable per-user data lives in SQLite (`api/data/zenly.db`, gitignored) via `store/db.ts` +
+`store/profile.ts`. The live `session`/`watch` state stays in the in-memory Map (`store/sessions.ts`).
+
+- **Tables**: `users(phone, name, prefs_json)`, `memories(phone, kind, fact)`,
+  `verdicts(phone, status, category, reason, mode)`, `events(phone, type, detail)`.
+- **Identity (both inputs)**: the agent asks the user's name on first contact and stores it via a
+  hidden `<profile>{"name":"…"}` block; the app also has a "your name" field sent up at
+  `/session/start`. Both reconcile in the `users` row (keyed by phone). The agent injects the known
+  name + recent memories into its system prompt.
+- **Phone identity**: `startLink()` embeds `&phone=<from>` so the app learns its own number
+  (`SessionStore.userPhone`) — required for the app to call `/judge`.
+- **Memory building (planned: phase C)**: `/judge` already logs every verdict + event; an LLM
+  "profiler" will distill these into `memories`. Explicit prefs come from the app + agent.
+- **DB override**: set `ZENLY_DB_PATH` (`:memory:` in tests).
 
 ## ReplayKit → Messages: full data flow & what's left
 
