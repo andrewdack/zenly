@@ -8,6 +8,7 @@
 import ReplayKit
 import CoreImage
 import UIKit
+import UserNotifications
 
 class SampleHandler: RPBroadcastSampleHandler {
 
@@ -122,10 +123,18 @@ class SampleHandler: RPBroadcastSampleHandler {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = multipartBody(boundary: boundary, jpegData: jpegData, userPhone: userPhone)
 
-        // Fire-and-forget: escalation (check-in / snitch) happens server-side, so the
-        // extension doesn't need the response — just free the slot when it's done.
-        let task = urlSession.dataTask(with: request) { [weak self] _, _, _ in
-            self?.finishUpload()
+        // The escalation iMessage is sent server-side. We also post a local banner here
+        // (the extension stays alive while recording, unlike the suspended main app) so
+        // the user gets an on-device popup the moment they're flagged off task.
+        let task = urlSession.dataTask(with: request) { [weak self] data, _, _ in
+            guard let self else { return }
+            self.finishUpload()
+            guard let data,
+                  let result = try? JSONDecoder().decode(JudgeResult.self, from: data) else { return }
+            if result.action?.type == "checkin" || result.action?.type == "escalate" {
+                let reason = result.action?.reason ?? result.verdict?.reason ?? "you're off task"
+                self.postOffTaskNotification(reason: reason)
+            }
         }
         task.resume()
     }
@@ -134,6 +143,19 @@ class SampleHandler: RPBroadcastSampleHandler {
         stateLock.lock()
         isUploading = false
         stateLock.unlock()
+    }
+
+    private func postOffTaskNotification(reason: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Zenly"
+        content.body = "lock back in — \(reason)"
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "zenly-offtask-\(UUID().uuidString)",
+            content: content,
+            trigger: nil   // deliver immediately
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     private func multipartBody(boundary: String, jpegData: Data, userPhone: String) -> Data {
@@ -148,4 +170,12 @@ class SampleHandler: RPBroadcastSampleHandler {
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         return body
     }
+}
+
+/// Minimal view of POST /judge's response — just what we need to decide on a banner.
+private struct JudgeResult: Decodable {
+    struct Verdict: Decodable { let status: String?; let reason: String? }
+    struct Action: Decodable { let type: String?; let level: String?; let reason: String? }
+    let verdict: Verdict?
+    let action: Action?
 }
