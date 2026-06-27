@@ -15,15 +15,16 @@ class SampleHandler: RPBroadcastSampleHandler {
     private static let frameFileName = "latest_frame.jpg"
     private static let userPhoneKey = "userPhone"   // written by the main app's SessionStore
     private static let sessionActiveKey = "sessionActive"
+    private static let apiBaseURLKey = "apiBaseURL"
     private static let jpegQuality: CGFloat = 0.5
 
-    // Keep this in sync with API_BASE_URL in Zenly/ContentView.swift.
-    private static let judgeURL = URL(string: "http://192.168.7.29:3001/judge")!
+    // Fallback only; the app writes API_BASE_URL into the App Group as the source of truth.
+    private static let fallbackAPIBaseURL = URL(string: "http://192.168.7.29:3001")!
 
     // Judging runs a vision model server-side, so throttle uploads (the old main-app
     // loop polled every 5s). The extension keeps running while the user is in other
     // apps, which is exactly when we need to catch them off task.
-    private static let uploadInterval: TimeInterval = 4.0
+    private static let uploadInterval: TimeInterval = 10.0
 
     // Created once — CIContext is expensive to allocate.
     private let ciContext = CIContext()
@@ -54,6 +55,12 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     private var sessionActive: Bool {
         UserDefaults(suiteName: Self.appGroupIdentifier)?.bool(forKey: Self.sessionActiveKey) ?? false
+    }
+
+    private var judgeURL: URL {
+        let rawBaseURL = UserDefaults(suiteName: Self.appGroupIdentifier)?.string(forKey: Self.apiBaseURLKey)
+        let baseURL = rawBaseURL.flatMap(URL.init(string:)) ?? Self.fallbackAPIBaseURL
+        return baseURL.appendingPathComponent("judge")
     }
 
     override func broadcastStarted(withSetupInfo setupInfo: [String : NSObject]?) {
@@ -120,7 +127,7 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     private func upload(jpegData: Data, userPhone: String) {
         let boundary = "Boundary-\(UUID().uuidString)"
-        var request = URLRequest(url: Self.judgeURL)
+        var request = URLRequest(url: judgeURL)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = multipartBody(boundary: boundary, jpegData: jpegData, userPhone: userPhone)

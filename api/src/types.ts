@@ -15,16 +15,15 @@ export interface Session {
   contactPhone: string | null;    // needed to snitch
 }
 
-/** Per-user grace-window state driving check-in → escalation. */
+/** Per-user state driving repeated check-ins → escalation. */
 export interface Watch {
   strikes: number;                // consecutive bad verdicts
   lastStatus: FocusStatus;
-  checkInSentAt: number | null;   // when we pinged them, null = none pending
-  graceUntil: number | null;      // escalate once we pass this while still bad
+  checkInTimes: number[];         // recent check-in timestamps inside the escalation window
   escalated: boolean;             // already escalated this episode
 }
 
-export interface Stats { nudges: number; snitches: number; checkIns: number; lastStatus: FocusStatus; }
+export interface Stats { nudges: number; snitches: number; checkIns: number; lastStatus: FocusStatus; lastReason: string | null; }
 
 export interface PhoneState {
   phone: string;
@@ -41,5 +40,5 @@ export interface ParsedSession {
 }
 
 export function freshWatch(): Watch {
-  return { strikes: 0, lastStatus: "ok", checkInSentAt: null, graceUntil: null, escalated: false };
+  return { strikes: 0, lastStatus: "ok", checkInTimes: [], escalated: false };
 }

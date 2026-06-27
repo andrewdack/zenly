@@ -14,7 +14,7 @@ function freshState(phone: string): PhoneState {
     history: [],
     session: null,
     watch: freshWatch(),
-    stats: { nudges: 0, snitches: 0, checkIns: 0, lastStatus: "ok" }
+    stats: { nudges: 0, snitches: 0, checkIns: 0, lastStatus: "ok", lastReason: null }
   };
 }
 
@@ -79,6 +79,7 @@ export function recordVerdict(
 ): WatchdogAction {
   const state = init(phone);
   state.stats.lastStatus = status;
+  state.stats.lastReason = reason;
   if (!state.session) return { type: "none" };
 
   const { watch, action } = step(state.watch, state.session, status, reason, now, config);
@@ -217,23 +218,29 @@ function normalizeSession(value: unknown): Session | null {
 function normalizeWatch(value: unknown): Watch {
   if (!isRecord(value)) return freshWatch();
   const fallback = freshWatch();
+  const legacyCheckInSentAt = typeof value.checkInSentAt === "number" && Number.isFinite(value.checkInSentAt)
+    ? [value.checkInSentAt]
+    : [];
+  const checkInTimes = Array.isArray(value.checkInTimes)
+    ? value.checkInTimes.filter((t): t is number => typeof t === "number" && Number.isFinite(t))
+    : legacyCheckInSentAt;
   return {
     strikes: typeof value.strikes === "number" && Number.isFinite(value.strikes) ? Math.max(0, Math.floor(value.strikes)) : fallback.strikes,
     lastStatus: FOCUS_STATUSES.includes(value.lastStatus as FocusStatus) ? (value.lastStatus as FocusStatus) : fallback.lastStatus,
-    checkInSentAt: typeof value.checkInSentAt === "number" && Number.isFinite(value.checkInSentAt) ? value.checkInSentAt : null,
-    graceUntil: typeof value.graceUntil === "number" && Number.isFinite(value.graceUntil) ? value.graceUntil : null,
+    checkInTimes,
     escalated: typeof value.escalated === "boolean" ? value.escalated : fallback.escalated
   };
 }
 
 function normalizeStats(value: unknown): Stats {
-  const fallback: Stats = { nudges: 0, snitches: 0, checkIns: 0, lastStatus: "ok" };
+  const fallback: Stats = { nudges: 0, snitches: 0, checkIns: 0, lastStatus: "ok", lastReason: null };
   if (!isRecord(value)) return fallback;
   return {
     nudges: typeof value.nudges === "number" && Number.isFinite(value.nudges) ? Math.max(0, Math.floor(value.nudges)) : fallback.nudges,
     snitches: typeof value.snitches === "number" && Number.isFinite(value.snitches) ? Math.max(0, Math.floor(value.snitches)) : fallback.snitches,
     checkIns: typeof value.checkIns === "number" && Number.isFinite(value.checkIns) ? Math.max(0, Math.floor(value.checkIns)) : fallback.checkIns,
-    lastStatus: FOCUS_STATUSES.includes(value.lastStatus as FocusStatus) ? (value.lastStatus as FocusStatus) : fallback.lastStatus
+    lastStatus: FOCUS_STATUSES.includes(value.lastStatus as FocusStatus) ? (value.lastStatus as FocusStatus) : fallback.lastStatus,
+    lastReason: typeof value.lastReason === "string" ? value.lastReason : null
   };
 }
 

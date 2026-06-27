@@ -28,6 +28,19 @@ struct EndSessionResponse: Decodable {
     let memoriesAdded: Int
 }
 
+struct SessionStatusResponse: Decodable {
+    let active: Bool
+    let stats: SessionStats?
+}
+
+struct SessionStats: Decodable {
+    let nudges: Int
+    let snitches: Int
+    let checkIns: Int
+    let lastStatus: String
+    let lastReason: String?
+}
+
 struct MemoryItem: Decodable {
     let kind: String
     let fact: String
@@ -140,6 +153,19 @@ struct ZenlyAPIClient {
             throw ZenlyAPIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
         return try JSONDecoder().decode(EndSessionResponse.self, from: data)
+    }
+
+    func fetchSession(userPhone: String) async throws -> SessionStatusResponse {
+        let encoded = userPhone.replacingOccurrences(of: "+", with: "%2B")
+        guard let url = URL(string: baseURL.absoluteString + "/session/" + encoded) else {
+            throw ZenlyAPIError.invalidResponse
+        }
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse else { throw ZenlyAPIError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw ZenlyAPIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return try JSONDecoder().decode(SessionStatusResponse.self, from: data)
     }
 
     func fetchProfile(userPhone: String) async throws -> ProfileResponse {

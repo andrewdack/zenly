@@ -34,51 +34,68 @@ export function snitchPrompt(task: string, screenContent: string): string {
 
 // ── Vision focus judge ───────────────────────────────────────────────────────
 
+const NEUTRAL_SURFACES = `neutral / utility / transient surfaces (never flag these):
+  - home screen, lock screen, app switcher, loading/blank/black screen, or no clear screen
+  - Settings, Screen Time / Digital Wellbeing, Control Center, notifications, system dialogs, permission prompts
+  - Spotify, Apple Music, or any music player
+  - email, Messages / iMessage / SMS, Phone, Maps, Calendar, Clock, Calculator, Files, Camera, Wallet, Weather`;
+
 const DESTRUCTIVE_RUBRIC = `"destructive" means the user is ACTIVELY ENGAGED in self-sabotaging behavior RIGHT NOW — not just a logo, icon, notification banner, or passing mention of an app.
 
 what counts as destructive (only if actively scrolling/playing/betting):
   - TikTok: actively swiping through the For You feed of short videos
   - Instagram Reels: actively watching the Reels tab feed (NOT a profile, post grid, or DMs)
-  - YouTube Shorts: actively swiping through the Shorts feed (NOT a regular video, search, or subscriptions page)
-  - Twitter/X or Reddit: actively scrolling a feed or timeline (NOT reading a single article or thread)
+  - YouTube Shorts: actively swiping through the Shorts feed (NOT a regular video, search, subscriptions page, or creator channel)
+  - Twitter/X or Reddit: actively scrolling a feed or timeline (NOT reading a single tweet, thread, article, or comments page)
   - addictive / time-sink video games: actively playing (NOT a home screen, game menu, or app store page)
   - gambling or sports betting: actively using a casino app, betting site, or slots
   - any other endless-scroll feed explicitly designed to hijack attention
 
 NOT destructive (even if the app is visible):
-  - a home screen, lock screen, settings page, or notification center
+  - ${NEUTRAL_SURFACES}
   - the app icon or splash screen of any social app
   - a DM conversation, comments section, or single post — not a feed scroll
   - YouTube regular videos, search results, subscriptions feed, or a creator's channel page
   - Instagram profile, story viewer, post grid, or explore page (only Reels feed counts)
   - Twitter/X reading a single tweet, thread, or article link
-  - work tools, docs, code editors, terminals, email, reading articles, watching a lecture
-  - anything where the person is clearly consuming intentional content vs. mindless scrolling`;
+  - work tools, docs, code editors, terminals, reading articles, watching a lecture
+  - deliberate/intentional content only avoids "destructive" when it is NOT an addictive feed/game/gambling surface; it can still be "off_task" in task mode if unrelated to the user's task`;
 
 /** System prompt for the vision judge, specialized by session mode. */
 export function focusJudgeSystem(mode: SessionMode, task: string | null): string {
   if (mode === "guardian") {
     return `you are zenly's screen watchdog. there is NO specific task — you only flag self-destructive behavior.
 
+${NEUTRAL_SURFACES}
+
 ${DESTRUCTIVE_RUBRIC}
 
 classify the single frame and return ONLY json:
 {"status": "ok" | "destructive", "destructiveCategory": "tiktok" | "instagram_reels" | "youtube_shorts" | "social_feed" | "games" | "gambling" | "other" | null, "confidence": 0..1, "reason": "short string"}
-use "ok" for anything that isn't clearly active destructive scrolling/playing/betting. if you can see a social app but the user is NOT actively in a scroll feed, that is "ok". only mark "destructive" when you can clearly see active feed consumption happening.`;
+Decision order:
+  1. If the screen is a neutral / utility / transient surface from the allowlist, return "ok".
+  2. If the user is clearly actively scrolling/playing/betting in the destructive rubric, return "destructive".
+  3. Otherwise return "ok".
+A social or entertainment app being visible is not enough. Only mark "destructive" when active feed/game/gambling engagement is unambiguous.`;
   }
 
   return `you are zenly's screen watchdog. the user is supposed to be working on: "${task ?? ""}".
 
-decide if the screen matches that task. also flag self-destructive behavior even if it's "off task".
+${NEUTRAL_SURFACES}
 
 ${DESTRUCTIVE_RUBRIC}
 
 classify the single frame and return ONLY json:
 {"status": "on_task" | "off_task" | "destructive", "destructiveCategory": "tiktok" | "instagram_reels" | "youtube_shorts" | "social_feed" | "games" | "gambling" | "other" | null, "confidence": 0..1, "reason": "short string"}
-  - "on_task": screen clearly relates to the task (or they're heads-down working).
-  - "destructive": user is ACTIVELY engaged in the destructive behavior described above (takes priority over off_task). a social app being visible but not in feed-scroll mode is NOT destructive.
-  - "off_task": not the task, not destructive either (e.g. a different work app, settings, messages).
-when uncertain, prefer "on_task". only escalate to "destructive" when active feed consumption is unambiguous.`;
+Decision order:
+  1. NEUTRAL / utility / transient surfaces from the allowlist → "on_task". Never flag these even if unrelated to the task.
+  2. Clearly relates to the task → "on_task".
+  3. Clear distraction unrelated to the task → "off_task" or "destructive". Short-form feeds (TikTok / Reels / Shorts), social-feed scrolling, video games, gambling/betting, streaming video/Netflix/YouTube watching, or unrelated entertainment are bad even if the user is deliberately consuming them. "Intentional" does NOT excuse unrelated entertainment in task mode.
+     - Use "destructive" for active addictive feeds, games, gambling/betting, or other hijacking loops.
+     - Use "off_task" for other unrelated entertainment or streaming.
+  4. Unrelated but work-shaped content (a different work app/doc not matching the task) → "off_task".
+  5. Genuinely ambiguous / cannot tell → "on_task".
+Be strict about obvious entertainment and lenient only for genuine ambiguity.`;
 }
 
 // ── Check-in message ─────────────────────────────────────────────────────────

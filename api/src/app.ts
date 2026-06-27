@@ -7,6 +7,7 @@ import { openApiDocument, swaggerHtml } from "./openapi.js";
 import type { MessageSender } from "./services/messageSender.js";
 import type { VisionProvider } from "./services/visionProvider.js";
 import { CHECKIN_SYSTEM, checkInPrompt, PROFILER_SYSTEM, profilerPrompt, SNITCH_SYSTEM, snitchPrompt } from "./prompts.js";
+import { DEFAULT_WATCHDOG, type WatchdogConfig } from "./agent/watchdog.js";
 import * as sessions from "./store/sessions.js";
 import * as profile from "./store/profile.js";
 import { startLink } from "./util/deeplink.js";
@@ -126,6 +127,31 @@ export function createApp(options: CreateAppOptions) {
       if (message) return message;
     } catch { /* fall through to default */ }
     return "hey — noticed you drifted off. everything good? lock back in for me 👀";
+  }
+
+  function optionalNumber(value: unknown): number | undefined {
+    if (value === undefined || value === null || value === "") return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  function watchConfigFromBody(body: Record<string, unknown>): WatchdogConfig | undefined {
+    const checkInCooldownMs = optionalNumber(body.checkInCooldownMs ?? body.graceMs);
+    const windowMs = optionalNumber(body.windowMs);
+    const snitchAfter = optionalNumber(body.snitchAfter);
+    if (checkInCooldownMs === undefined && windowMs === undefined && snitchAfter === undefined) return undefined;
+
+    return {
+      checkInCooldownMs: checkInCooldownMs !== undefined && checkInCooldownMs >= 0
+        ? checkInCooldownMs
+        : DEFAULT_WATCHDOG.checkInCooldownMs,
+      windowMs: windowMs !== undefined && windowMs > 0
+        ? windowMs
+        : DEFAULT_WATCHDOG.windowMs,
+      snitchAfter: snitchAfter !== undefined && snitchAfter > 0
+        ? Math.floor(snitchAfter)
+        : DEFAULT_WATCHDOG.snitchAfter,
+    };
   }
 
   // ── Sessions ──────────────────────────────────────────────────────────────
@@ -254,10 +280,9 @@ export function createApp(options: CreateAppOptions) {
 
       profile.logVerdict(userPhone, verdict.status, verdict.destructiveCategory, verdict.reason, session.mode);
 
-      const graceMs = req.body.graceMs ? Number(req.body.graceMs) : undefined;
       const action = sessions.recordVerdict(
         userPhone, verdict.status, verdict.reason, Date.now(),
-        graceMs && Number.isFinite(graceMs) ? { graceMs } : undefined
+        watchConfigFromBody(req.body as Record<string, unknown>)
       );
 
       let escalation: { sent: boolean; to?: string; message?: string } = { sent: false };

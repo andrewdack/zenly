@@ -5,6 +5,7 @@ enum AppGroup {
     static let identifier = "group.com.andrewh.zenly"
     static let latestFrameFileName = "latest_frame.jpg"
     static let sessionActiveKey = "sessionActive"
+    static let apiBaseURLKey = "apiBaseURL"
 
     static var container: UserDefaults? { UserDefaults(suiteName: identifier) }
     static var fileContainer: URL? {
@@ -68,8 +69,7 @@ final class SessionStore {
 
     @ObservationIgnored private let apiClient = ZenlyAPIClient()
     @ObservationIgnored private var judgeTask: Task<Void, Never>?
-    @ObservationIgnored private var lastUploadedFrameModifiedAt: Date?
-    @ObservationIgnored private static let judgeIntervalNanoseconds: UInt64 = 5_000_000_000
+    @ObservationIgnored private static let judgeIntervalNanoseconds: UInt64 = 10_000_000_000
 
     // Persistent user settings (configured in the app before texting the agent).
     var userName: String {
@@ -98,6 +98,7 @@ final class SessionStore {
         static let contactPhone = "contactPhone"
         static let userPhone = "userPhone"
         static let sessionActive = AppGroup.sessionActiveKey
+        static let apiBaseURL = AppGroup.apiBaseURLKey
     }
 
     init() {
@@ -107,6 +108,7 @@ final class SessionStore {
         interventionLevel = stored.flatMap(InterventionLevel.init(rawValue:)) ?? .nudge
         contactPhone = d?.string(forKey: Keys.contactPhone) ?? ""
         userPhone = d?.string(forKey: Keys.userPhone) ?? ""
+        defaults?.set(API_BASE_URL.absoluteString, forKey: Keys.apiBaseURL)
         setBroadcastSessionActive(false)
     }
 
@@ -163,11 +165,10 @@ final class SessionStore {
 
     private func startJudgeLoop() {
         stopJudgeLoop()
-        lastUploadedFrameModifiedAt = nil
         judgeStatusText = "start screen capture"
         judgeTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.judgeLatestFrameIfReady()
+                await self?.refreshSessionStatusIfReady()
                 try? await Task.sleep(nanoseconds: Self.judgeIntervalNanoseconds)
             }
         }
@@ -176,10 +177,9 @@ final class SessionStore {
     private func stopJudgeLoop() {
         judgeTask?.cancel()
         judgeTask = nil
-        lastUploadedFrameModifiedAt = nil
     }
 
-    private func judgeLatestFrameIfReady() async {
+    private func refreshSessionStatusIfReady() async {
         guard let currentSession = session else {
             stopJudgeLoop()
             return
@@ -195,40 +195,28 @@ final class SessionStore {
             return
         }
 
-        guard let frameURL = AppGroup.latestFrameURL else {
-            judgeStatusText = "app group unavailable"
-            return
-        }
-
-        guard FileManager.default.fileExists(atPath: frameURL.path) else {
-            judgeStatusText = "start screen capture"
-            return
-        }
-
-        let modifiedAt = ((try? FileManager.default.attributesOfItem(atPath: frameURL.path))?[.modificationDate] as? Date) ?? Date.distantPast
-        if let lastUploadedFrameModifiedAt, modifiedAt <= lastUploadedFrameModifiedAt { return }
-
-        let frameData: Data
         do {
-            frameData = try Data(contentsOf: frameURL)
-        } catch {
-            judgeStatusText = "could not read frame"
-            lastJudgeReason = error.localizedDescription
-            return
-        }
+            let response = try await apiClient.fetchSession(userPhone: userPhone)
+            guard response.active else {
+                stopJudgeLoop()
+                setBroadcastSessionActive(false)
+                session = nil
+                onTask = true
+                judgeStatusText = "screen judge idle"
+                return
+            }
 
-        guard !frameData.isEmpty else {
-            judgeStatusText = "empty frame"
-            return
-        }
-
-        judgeStatusText = "judging frame"
-        do {
-            let response = try await apiClient.judgeFrame(imageData: frameData, userPhone: userPhone)
-            lastUploadedFrameModifiedAt = modifiedAt
-            applyJudgeResponse(response)
+            if let stats = response.stats {
+                nudgeCount = stats.nudges
+                snitchCount = stats.snitches
+                onTask = stats.lastStatus == "on_task" || stats.lastStatus == "ok"
+                lastJudgeReason = stats.lastReason ?? ""
+                judgeStatusText = statusCopy(forStatus: stats.lastStatus)
+            } else {
+                judgeStatusText = "watching screen"
+            }
         } catch {
-            judgeStatusText = "judge upload failed"
+            judgeStatusText = "status sync failed"
             lastJudgeReason = error.localizedDescription
         }
     }
@@ -262,17 +250,21 @@ final class SessionStore {
         case "checkin":
             return "check-in sent"
         case "waiting":
-            return "grace window active"
+            return "check-in cooldown"
         case "escalate":
             return "escalating \(response.action.level ?? interventionLevel.label)"
         default:
-            switch response.verdict.status {
-            case "on_task": return "on task"
-            case "off_task": return "off task"
-            case "destructive": return "destructive pattern"
-            case "ok": return "guardian ok"
-            default: return response.verdict.status
-            }
+            return statusCopy(forStatus: response.verdict.status)
+        }
+    }
+
+    private func statusCopy(forStatus status: String) -> String {
+        switch status {
+        case "on_task": return "on task"
+        case "off_task": return "off task"
+        case "destructive": return "destructive pattern"
+        case "ok": return "guardian ok"
+        default: return status
         }
     }
 

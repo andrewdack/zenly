@@ -1,6 +1,8 @@
 import SwiftUI
-#if canImport(ReplayKit) && canImport(UIKit)
+#if canImport(ReplayKit)
 import ReplayKit
+#endif
+#if canImport(UIKit)
 import UIKit
 #endif
 
@@ -70,6 +72,7 @@ private struct ZenlyShell<Content: View>: View {
                     .frame(maxWidth: .infinity, minHeight: geo.size.height)
             }
             .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(alignment: .center) {
@@ -167,7 +170,7 @@ private struct SettingsSummary: View {
         VStack(alignment: .leading, spacing: 10) {
             SummaryRow(key: "mode", value: store.interventionLevel.rawValue.lowercased())
             SummaryRow(key: "witness",
-                       value: store.contactPhone.isEmpty ? "not set" : store.contactPhone)
+                       value: store.contactPhone.isEmpty ? "not set" : DisplayFormat.phone(store.contactPhone))
 
             HStack(spacing: 18) {
                 Button(action: onEdit) {
@@ -199,18 +202,37 @@ private struct SummaryRow: View {
     let value: String
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(key)
-                .font(.redactionItalic(size: 18))
-                .opacity(0.72)
-                .fixedSize(horizontal: true, vertical: false)
-            Spacer(minLength: 8)
-            Text(value)
-                .font(.redaction(size: 20, weight: .bold))
-                .multilineTextAlignment(.trailing)
-                .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(1)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                keyText
+                Spacer(minLength: 8)
+                valueText
+                    .multilineTextAlignment(.trailing)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                keyText
+                valueText
+                    .multilineTextAlignment(.leading)
+            }
         }
+    }
+
+    private var keyText: some View {
+        Text(key)
+            .font(.redactionItalic(size: 18))
+            .opacity(0.72)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var valueText: some View {
+        Text(value)
+            .font(.redaction(size: 20, weight: .bold))
+            .lineLimit(3)
+            .minimumScaleFactor(0.72)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+            .layoutPriority(1)
     }
 }
 
@@ -246,10 +268,11 @@ private struct SettingsScreen: View {
                 .padding(.top, 26)
             PhoneField(text: $store.contactPhone)
                 .padding(.top, 10)
-            Text("who we text when you wander off. stays on your phone.")
+            Text(contactHint)
                 .font(.redactionItalic(size: 15))
                 .opacity(0.66)
                 .padding(.top, 8)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text("consequence")
                 .font(.redactionItalic(size: 18))
@@ -278,7 +301,7 @@ private struct SettingsScreen: View {
 
             Spacer()
 
-            Button(action: onDone) {
+            Button(action: finishSettings) {
                 Text("done")
                     .font(.redaction(size: 30, weight: .bold))
                     .frame(maxWidth: .infinity)
@@ -289,6 +312,26 @@ private struct SettingsScreen: View {
             .opacity(store.contactPhone.isEmpty ? 0.45 : 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("done") { dismissKeyboard() }
+                    .font(.redactionItalic(size: 18))
+            }
+        }
+    }
+
+    private var contactHint: String {
+        let trimmed = store.contactPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return "example: +1 (415) 555-0123"
+        }
+        return "will text \(DisplayFormat.phone(trimmed)) if you wander off."
+    }
+
+    private func finishSettings() {
+        dismissKeyboard()
+        onDone()
     }
 }
 
@@ -306,8 +349,12 @@ private struct ModeRow: View {
             HStack(spacing: 8) {
                 Text("The")
                     .font(.redaction(size: 34, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Text(level.rawValue.lowercased())
                     .font(.redactionItalic(size: 34))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             .opacity(selected ? 1 : 0.6)
         }
@@ -420,10 +467,15 @@ private struct BroadcastStartCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("screen capture")
                     .font(.redaction(size: 22, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Text(didAutoTrigger ? "accept the system prompt" : "tap to start recording")
                     .font(.redactionItalic(size: 15))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
                     .opacity(0.72)
             }
+            .layoutPriority(1)
 
             Spacer(minLength: 0)
         }
@@ -447,9 +499,9 @@ private struct JudgeStatusCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             SummaryRow(key: "judge", value: store.judgeStatusText)
-            SummaryRow(key: "api", value: API_BASE_URL.host ?? "?")
+            SummaryRow(key: "api", value: DisplayFormat.apiBaseURL(API_BASE_URL))
             if !store.userPhone.isEmpty {
-                SummaryRow(key: "phone", value: store.userPhone)
+                SummaryRow(key: "phone", value: DisplayFormat.phone(store.userPhone))
             }
             if !store.lastJudgeReason.isEmpty {
                 Text(store.lastJudgeReason)
@@ -519,8 +571,12 @@ private struct TimerBlock: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(clockString(displayed))
                     .font(.redaction(size: 52, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
                 Text(progress == nil ? "elapsed" : "remaining")
                     .font(.redactionItalic(size: 17))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .opacity(0.72)
             }
 
@@ -575,24 +631,12 @@ private struct PhoneField: View {
     @Binding var text: String
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            if text.isEmpty {
-                Text("accountability contact")
-                    .font(.redactionItalic(size: 20))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(.horizontal, 14)
-                    .allowsHitTesting(false)
-            }
-            TextField("", text: $text)
-                .font(.redactionItalic(size: 20))
-                .foregroundStyle(.white)
-                .tint(.white)
-                .keyboardType(.phonePad)
-                .textContentType(.telephoneNumber)
-                .padding(.horizontal, 14)
-        }
-        .frame(height: 58)
-        .overlay(Rectangle().stroke(.white, lineWidth: 1.8))
+        EditableTextField(
+            placeholder: "accountability contact",
+            text: $text,
+            keyboardType: .phonePad,
+            textContentType: .telephoneNumber
+        )
     }
 }
 
@@ -600,23 +644,61 @@ private struct NameField: View {
     @Binding var text: String
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            if text.isEmpty {
-                Text("what should we call you?")
+        EditableTextField(
+            placeholder: "what should we call you?",
+            text: $text,
+            keyboardType: .default,
+            textContentType: .givenName,
+            autocorrectionDisabled: true,
+            capitalization: .words
+        )
+    }
+}
+
+private struct EditableTextField: View {
+    let placeholder: String
+    @Binding var text: String
+    var keyboardType: UIKeyboardType = .default
+    var textContentType: UITextContentType? = nil
+    var autocorrectionDisabled = false
+    var capitalization: TextInputAutocapitalization = .never
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField(
+                "",
+                text: $text,
+                prompt: Text(placeholder)
                     .font(.redactionItalic(size: 20))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(.horizontal, 14)
-                    .allowsHitTesting(false)
+                    .foregroundColor(.white.opacity(0.68))
+            )
+            .font(.redactionItalic(size: 20))
+            .foregroundStyle(.white)
+            .tint(.white)
+            .keyboardType(keyboardType)
+            .textContentType(textContentType)
+            .textInputAutocapitalization(capitalization)
+            .autocorrectionDisabled(autocorrectionDisabled)
+            .submitLabel(.done)
+            .onSubmit { dismissKeyboard() }
+            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Text("×")
+                        .font(.redaction(size: 24, weight: .bold))
+                        .frame(width: 34, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("clear \(placeholder)")
             }
-            TextField("", text: $text)
-                .font(.redactionItalic(size: 20))
-                .foregroundStyle(.white)
-                .tint(.white)
-                .textContentType(.givenName)
-                .autocorrectionDisabled()
-                .padding(.horizontal, 14)
         }
-        .frame(height: 58)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+        .contentShape(Rectangle())
         .overlay(Rectangle().stroke(.white, lineWidth: 1.8))
     }
 }
@@ -662,6 +744,45 @@ private extension Font {
 
 private extension Color {
     static let zenlyFog = Color(red: 0.40, green: 0.40, blue: 0.39)
+}
+
+private enum DisplayFormat {
+    static func apiBaseURL(_ url: URL) -> String {
+        let host = url.host ?? url.absoluteString
+        if let port = url.port {
+            return "\(host):\(port)"
+        }
+        return host
+    }
+
+    static func phone(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "not set" }
+
+        let digits = String(trimmed.filter { $0.isNumber })
+        if digits.count == 11, digits.first == "1" {
+            return "+1 (\(chunk(digits, 1, 3))) \(chunk(digits, 4, 3))-\(chunk(digits, 7, 4))"
+        }
+        if digits.count == 10 {
+            return "(\(chunk(digits, 0, 3))) \(chunk(digits, 3, 3))-\(chunk(digits, 6, 4))"
+        }
+        if trimmed.hasPrefix("+"), !digits.isEmpty {
+            return "+\(digits)"
+        }
+        return trimmed
+    }
+
+    private static func chunk(_ digits: String, _ start: Int, _ length: Int) -> String {
+        let chars = Array(digits)
+        guard start >= 0, chars.count >= start + length else { return "" }
+        return String(chars[start..<(start + length)])
+    }
+}
+
+private func dismissKeyboard() {
+    #if canImport(UIKit)
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    #endif
 }
 
 private extension InterventionLevel {

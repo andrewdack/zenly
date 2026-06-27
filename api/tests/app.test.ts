@@ -300,7 +300,8 @@ describe("Zenly API", () => {
       .post("/judge")
       .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
       .field("userPhone", userPhone)
-      .field("graceMs", "-1")
+      .field("checkInCooldownMs", "0")
+      .field("snitchAfter", "2")
       .expect(200)
       .expect((res) => {
         expect(res.body.action).toMatchObject({ type: "checkin" });
@@ -312,7 +313,8 @@ describe("Zenly API", () => {
       .post("/judge")
       .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
       .field("userPhone", userPhone)
-      .field("graceMs", "-1")
+      .field("checkInCooldownMs", "0")
+      .field("snitchAfter", "2")
       .expect(200);
 
     expect(escalation.body.action).toMatchObject({ type: "escalate", level: "snitch" });
@@ -368,7 +370,19 @@ describe("Zenly API", () => {
       .post("/judge")
       .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
       .field("userPhone", userPhone)
-      .field("graceMs", "-1")
+      .field("checkInCooldownMs", "0")
+      .field("snitchAfter", "3")
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.action).toMatchObject({ type: "checkin" });
+      });
+
+    await request(app)
+      .post("/judge")
+      .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
+      .field("userPhone", userPhone)
+      .field("checkInCooldownMs", "0")
+      .field("snitchAfter", "3")
       .expect(200)
       .expect((res) => {
         expect(res.body.action).toMatchObject({ type: "checkin" });
@@ -378,7 +392,8 @@ describe("Zenly API", () => {
       .post("/judge")
       .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
       .field("userPhone", userPhone)
-      .field("graceMs", "-1")
+      .field("checkInCooldownMs", "0")
+      .field("snitchAfter", "3")
       .expect(200);
 
     expect(escalation.body.action).toMatchObject({ type: "escalate", level: "snitch" });
