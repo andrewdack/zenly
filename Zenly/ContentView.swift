@@ -277,13 +277,13 @@ private struct RunningSessionView: View {
                 .tracking(-0.8)
                 .padding(.top, 36)
 
-            Text("currently focusing on")
+            Text(session.isGuardian ? "guardian mode" : "currently focusing on")
                 .font(.redactionItalic(size: 20))
                 .opacity(0.82)
                 .padding(.top, 26)
 
-            Text(session.task)
-                .font(.redaction(size: 32, weight: .bold))
+            Text(session.isGuardian ? "no task — just keeping you off the bad stuff" : session.task)
+                .font(.redaction(size: session.isGuardian ? 24 : 32, weight: .bold))
                 .lineSpacing(5)
                 .padding(16)
                 .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)

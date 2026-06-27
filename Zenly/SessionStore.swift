@@ -23,10 +23,18 @@ enum InterventionLevel: String, CaseIterable, Identifiable {
     }
 }
 
+enum FocusMode: String {
+    case task       // focused on a specific thing
+    case guardian   // no task, just watching for self-destructive behavior
+}
+
 struct FocusSession: Equatable {
-    var task: String
+    var mode: FocusMode = .task
+    var task: String            // empty in guardian mode
     var durationMinutes: Int?   // nil = indefinite
     var startedAt: Date
+
+    var isGuardian: Bool { mode == .guardian }
 
     var endsAt: Date? {
         guard let d = durationMinutes else { return nil }
@@ -80,15 +88,17 @@ final class SessionStore {
         else { return false }
 
         let items = components.queryItems ?? []
-        let task = items.first(where: { $0.name == "task" })?.value ?? "Focus session"
+        let isGuardian = items.first(where: { $0.name == "mode" })?.value == "guardian"
+        let task = items.first(where: { $0.name == "task" })?.value
+            ?? (isGuardian ? "" : "Focus session")
         let duration = items.first(where: { $0.name == "duration" })?.value.flatMap { Int($0) }
 
-        start(task: task, durationMinutes: duration)
+        start(mode: isGuardian ? .guardian : .task, task: task, durationMinutes: duration)
         return true
     }
 
-    func start(task: String, durationMinutes: Int? = nil) {
-        session = FocusSession(task: task, durationMinutes: durationMinutes, startedAt: Date())
+    func start(mode: FocusMode = .task, task: String, durationMinutes: Int? = nil) {
+        session = FocusSession(mode: mode, task: task, durationMinutes: durationMinutes, startedAt: Date())
         onTask = true
         nudgeCount = 0
         snitchCount = 0
