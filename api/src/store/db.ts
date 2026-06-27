@@ -62,5 +62,14 @@ function migrate(d: Database.Database) {
       created_at  INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_events_phone ON events(phone);
+
+    CREATE TABLE IF NOT EXISTS live_sessions (
+      phone        TEXT PRIMARY KEY,
+      session_json TEXT NOT NULL,
+      watch_json   TEXT NOT NULL,
+      stats_json   TEXT NOT NULL,
+      history_json TEXT NOT NULL DEFAULT '[]',
+      updated_at   INTEGER NOT NULL
+    );
   `);
 }
