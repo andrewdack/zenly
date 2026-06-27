@@ -323,7 +323,8 @@ describe("Zenly API", () => {
 
   it("uses session settings to snitch to the accountability contact", async () => {
     const userPhone = "+15550002001";
-    const contactPhone = "+15550002002";
+    const contactPhone = "5715996273";
+    const normalizedContactPhone = "+15715996273";
     const focusProvider: VisionProvider = {
       isFocused: vi.fn(async () => ({
         status: "off_task" as const,
@@ -364,7 +365,7 @@ describe("Zenly API", () => {
         contactPhone
       })
       .expect(200);
-    expect(start.body.session).toMatchObject({ interventionLevel: "snitch", contactPhone });
+    expect(start.body.session).toMatchObject({ interventionLevel: "snitch", contactPhone: normalizedContactPhone });
 
     await request(app)
       .post("/judge")
@@ -399,11 +400,48 @@ describe("Zenly API", () => {
     expect(escalation.body.action).toMatchObject({ type: "escalate", level: "snitch" });
     expect(escalation.body.escalation).toMatchObject({
       sent: true,
-      to: contactPhone,
+      to: normalizedContactPhone,
       message: "caught in 4k. lock in."
     });
     expect(messageSender.sendMessage).toHaveBeenLastCalledWith({
-      to: contactPhone,
+      to: normalizedContactPhone,
+      message: "caught in 4k. lock in."
+    });
+  });
+
+  it("normalizes manual snitch contact phone numbers before sending", async () => {
+    const messageSender: MessageSender = {
+      sendMessage: vi.fn(async ({ to }) => ({
+        provider: "photon" as const,
+        platform: "imessage" as const,
+        to,
+        messageId: `msg_${to}`,
+        spaceId: `space_${to}`
+      }))
+    };
+    const openai = {
+      chat: {
+        completions: {
+          create: vi.fn(async () => ({
+            choices: [{ message: { content: "caught in 4k. lock in." } }]
+          }))
+        }
+      }
+    };
+    const { app } = makeApp({ messageSender, openai });
+
+    const response = await request(app)
+      .post("/snitch")
+      .send({
+        task: "demo focus session",
+        contactPhone: "5715996273",
+        screenContent: "doomscrolling TikTok"
+      })
+      .expect(200);
+
+    expect(response.body.to).toBe("+15715996273");
+    expect(messageSender.sendMessage).toHaveBeenCalledWith({
+      to: "+15715996273",
       message: "caught in 4k. lock in."
     });
   });

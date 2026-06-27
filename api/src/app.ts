@@ -11,6 +11,7 @@ import { DEFAULT_WATCHDOG, type WatchdogConfig } from "./agent/watchdog.js";
 import * as sessions from "./store/sessions.js";
 import * as profile from "./store/profile.js";
 import { startLink } from "./util/deeplink.js";
+import { normalizePhoneTarget } from "./util/phone.js";
 import type { InterventionLevel, Session, SessionMode } from "./types.js";
 import type OpenAI from "openai";
 
@@ -178,9 +179,10 @@ export function createApp(options: CreateAppOptions) {
       // Explicit identity from the app keeps the profile in sync with the agent.
       if (name) profile.upsertUser(String(userPhone), { name: String(name) });
 
+      const normalizedContact = contactPhone ? normalizePhoneTarget(String(contactPhone)) : null;
       const session = sessions.startSession(String(userPhone), parsed, {
         interventionLevel: level,
-        contactPhone: contactPhone ? String(contactPhone) : null,
+        contactPhone: normalizedContact || null,
       });
       res.json({ session, deeplink: startLink(deeplinkScheme, parsed, String(userPhone)) });
     })
@@ -300,12 +302,13 @@ export function createApp(options: CreateAppOptions) {
         }
       } else if (action.type === "escalate") {
         if (action.level === "snitch" && session.contactPhone) {
+          const contactPhone = normalizePhoneTarget(session.contactPhone);
           const message = await generateSnitchText(session.task ?? "staying off the bad apps", verdict.reason);
           try {
-            await messageSender.sendMessage({ to: session.contactPhone, message });
+            await messageSender.sendMessage({ to: contactPhone, message });
             sessions.recordSnitch(userPhone);
             profile.logEvent(userPhone, "snitch", message);
-            escalation = { sent: true, to: session.contactPhone, message };
+            escalation = { sent: true, to: contactPhone, message };
           } catch (err) {
             console.error("[judge] snitch send failed:", err);
             escalation = { sent: false, message };
@@ -329,8 +332,9 @@ export function createApp(options: CreateAppOptions) {
       if (!task || !contactPhone || !screenContent)
         throw new HttpError(400, "task, contactPhone, and screenContent are required", "missing_fields");
 
+      const normalizedContact = normalizePhoneTarget(String(contactPhone));
       const message = await generateSnitchText(task as string, screenContent as string);
-      const result = await messageSender.sendMessage({ to: contactPhone as string, message });
+      const result = await messageSender.sendMessage({ to: normalizedContact, message });
       if (userPhone) sessions.recordSnitch(userPhone as string);
       res.json({ message, ...result });
     })
