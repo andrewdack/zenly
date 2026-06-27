@@ -5,12 +5,20 @@ Intent-aware distraction blocker with a conversational iMessage agent.
 **User flow:**
 1. First launch: user configures intervention level (nudge / block / snitch) and accountability
    contact in the app. This is a one-time setup.
-2. To start a session: user iMessages the Mac running the backend. The agent collects the task
-   and an optional duration (indefinite is fine). Agent replies with a deep link.
-3. User taps the deep link → iOS app starts the focus session.
-4. App captures screenshots (ReplayKit), backend vision model judges "on task" vs "off task".
-5. Escalation follows the configured level: local notification → ManagedSettings shield →
-   funny iMessage to the accountability contact (contact phone lives in the app, not the agent).
+2. To start a session: user iMessages the agent (`4156055838`). The agent collects either a
+   **task** (focus session, optional duration) **or** starts **guardian mode** (no task — just
+   watching for self-destructive behavior). Agent replies with a deep link.
+3. User taps the deep link → iOS app starts the session (task or guardian).
+4. App captures screenshots (ReplayKit) and POSTs them to `/judge`. The vision model returns a
+   status: `on_task` / `off_task` / `destructive` / `ok`. **Destructive** = doomscrolling, addictive
+   games, gambling — flagged in any mode, even if technically "off task".
+5. **Watchdog (grace window)**: first slip → agent texts a **check-in** ("hey, what's up?"); the user
+   can reply to explain or own it. If they keep slipping past the grace window, Zenly **escalates**
+   per the configured level: local notification (nudge) → ManagedSettings shield (block) → funny
+   iMessage to the accountability contact (snitch). Behavior-driven — stopping resets the episode.
+
+The check-in → escalation logic lives in `api/src/agent/watchdog.ts` (a pure reducer) and is
+driven by `POST /judge`. Nudge/block are applied on-device; snitch is sent by the backend.
 
 Hackathon project. macOS, Xcode 26.6, Node 24, iPhone target.
 
@@ -35,9 +43,9 @@ api/                     # canonical Node.js + Express + TypeScript server
 | 3 | iMessage agent conversation loop (stateful, `<session>` parsing, iMessage reply) | ✅ done — `api/src/agent/handler.ts`; local watcher + Photon/Spectrum both wired |
 | 4 | SwiftUI: settings screen (intervention level + contact), waiting screen, active-session timer | ✅ done — `Zenly/ContentView.swift`; settings sheet on first launch, waiting screen, live `TimerRing`. Verified in sim. |
 | 5 | ReplayKit broadcast: frame → JPEG → App Group container | ☐ todo |
-| 6 | App polling loop: read frames → POST /judge → nudge/escalate | ☐ todo |
+| 6 | App polling loop: read frames → POST /judge → nudge/escalate | ◐ backend `/judge` + watchdog done (guardian/task, check-in, grace-window escalate); app frame loop todo |
 | 7 | DeviceActivityMonitor: read shield instruction → ManagedSettingsStore | ☐ todo (PAID — Family Controls) |
-| 8 | Snitch escalation → POST /snitch → iMessage to accountability contact | ◐ `/snitch` route done; app passes contactPhone from settings; trigger todo |
+| 8 | Snitch escalation → iMessage to accountability contact | ◐ auto-triggered by `/judge` watchdog on escalate (+ manual `/snitch`); app passes contactPhone at session start |
 | 9 | Demo polish: shield text, summary message, stats dashboard | ☐ todo |
 
 ## iOS project facts
@@ -135,10 +143,11 @@ api/src/server.ts                       # Local entry: Express + imessage-kit wa
 api/src/app.ts                          # createApp() — all routes, error handler, OpenAPI docs
 api/src/openapi.ts                      # OpenAPI spec + Swagger UI
 api/src/config.ts                       # env vars + getConfig()
-api/src/types.ts                        # shared TS interfaces (Session, ChatMessage, etc.)
-api/src/prompts.ts                      # agent + snitch system prompts (gen-z tone)
-api/src/agent/handler.ts               # createAgentHandler() — stateful conversation loop
-api/src/store/sessions.ts              # in-memory session state per phone number
+api/src/types.ts                        # shared TS types (Session/mode, FocusStatus, Watch, etc.)
+api/src/prompts.ts                      # agent + snitch + focus-judge (task/guardian) + check-in prompts
+api/src/agent/handler.ts               # createAgentHandler() — stateful conversation loop (parses mode)
+api/src/agent/watchdog.ts              # pure grace-window reducer: good→reset, slip→check-in→escalate
+api/src/store/sessions.ts              # per-phone session + watch state; recordVerdict() runs the watchdog
 api/src/util/deeplink.ts               # startLink() — %20 encoding (NOT "+")
 api/src/services/visionProvider.ts     # VisionProvider interface
 api/src/services/openAiFocusProvider.ts # OpenRouter vision implementation
@@ -167,11 +176,15 @@ npm run dev            # tsx watch src/index.ts   (Spectrum message loop only)
 | Method | Path | Body / purpose |
 |--------|------|----------------|
 | GET  | `/health`           | `{ ok: true }` |
-| POST | `/isFocused`        | multipart: `image` (JPEG) + optional `task` form field → `{ isFocused, confidence, reason }` |
+| POST | `/isFocused`        | multipart: `image` (JPEG) + optional `task` → `{ status, isFocused, destructiveCategory, confidence, reason }` (stateless one-shot; mode = task if `task` given, else guardian) |
+| POST | `/judge`            | **stateful** multipart: `image` + `userPhone` (+ optional `graceMs`) → judges with the user's session mode, runs the watchdog, sends check-in / snitch, returns `{ verdict, action, escalation, stats }`. Requires an active session. |
 | POST | `/sendMessage`      | `{ to, message }` → send iMessage via configured provider |
-| POST | `/session/start`    | `{ userPhone, task, durationMinutes? }` → session + deeplink |
+| POST | `/session/start`    | `{ userPhone, task?, durationMinutes?, mode?, interventionLevel?, contactPhone? }` → session + deeplink (`mode: "guardian"` for no-task watching) |
 | GET  | `/session/:phone`   | active session + stats + deeplink |
-| POST | `/snitch`           | `{ task, contactPhone, screenContent, userPhone? }` → LLM-generated shame iMessage |
+| POST | `/snitch`           | `{ task, contactPhone, screenContent, userPhone? }` → LLM-generated shame iMessage (manual trigger; `/judge` does this automatically on escalate) |
+
+`action` from `/judge` is one of `none` / `checkin` / `waiting` / `escalate` (with `level`). The
+app applies nudge/block locally from `action`; snitch is sent server-side.
 
 Inbound messages arrive via the local iMessage watcher, not HTTP.
 
