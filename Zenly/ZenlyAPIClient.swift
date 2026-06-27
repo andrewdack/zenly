@@ -154,7 +154,7 @@ struct ZenlyAPIClient {
         }
         return try JSONDecoder().decode(EndSessionResponse.self, from: data)
     }
-
+    
     func fetchSession(userPhone: String) async throws -> SessionStatusResponse {
         let encoded = userPhone.replacingOccurrences(of: "+", with: "%2B")
         guard let url = URL(string: baseURL.absoluteString + "/session/" + encoded) else {
