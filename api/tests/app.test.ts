@@ -6,12 +6,13 @@ import { createApp } from "../src/app.js";
 import type { MessageSender } from "../src/services/messageSender.js";
 import type { VisionProvider } from "../src/services/visionProvider.js";
 import { closeDb } from "../src/store/db.js";
+import * as sessions from "../src/store/sessions.js";
 
 afterAll(() => closeDb());
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeApp(options: { messageSender?: MessageSender; openai?: any } = {}) {
-  const focusProvider: VisionProvider = {
+function makeApp(options: { messageSender?: MessageSender; openai?: any; focusProvider?: VisionProvider } = {}) {
+  const focusProvider: VisionProvider = options.focusProvider ?? {
     isFocused: vi.fn(async () => ({
       status: "ok" as const,
       isFocused: true,
@@ -202,6 +203,195 @@ describe("Zenly API", () => {
 
     expect(messageSender.sendMessage).not.toHaveBeenCalled();
   });
+
+  it("normalizes the removed block intervention to nudge", async () => {
+    const { app } = makeApp();
+
+    const response = await request(app)
+      .post("/session/start")
+      .send({
+        userPhone: "+15550002003",
+        task: "write tests",
+        interventionLevel: "block"
+      })
+      .expect(200);
+
+    expect(response.body.session.interventionLevel).toBe("nudge");
+  });
+
+  it("rehydrates an active session after an in-memory reset", async () => {
+    const { app } = makeApp();
+    const phone = "+15550002004";
+
+    await request(app)
+      .post("/session/start")
+      .send({
+        userPhone: phone,
+        task: "finish durable sessions",
+        durationMinutes: 25,
+        interventionLevel: "snitch",
+        contactPhone: "+15550002005"
+      })
+      .expect(200);
+
+    sessions.resetForTests();
+
+    const response = await request(app)
+      .get(`/session/${encodeURIComponent(phone)}`)
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      active: true,
+      session: {
+        mode: "task",
+        task: "finish durable sessions",
+        durationMinutes: 25,
+        interventionLevel: "snitch",
+        contactPhone: "+15550002005"
+      }
+    });
+  });
+
+  it("preserves watchdog grace state across an in-memory reset", async () => {
+    const userPhone = "+15550002006";
+    const contactPhone = "+15550002007";
+    const focusProvider: VisionProvider = {
+      isFocused: vi.fn(async () => ({
+        status: "off_task" as const,
+        isFocused: false,
+        destructiveCategory: null,
+        confidence: 0.91,
+        reason: "doomscrolling tiktok",
+        provider: "openrouter",
+        model: "test-model"
+      }))
+    };
+    const messageSender: MessageSender = {
+      sendMessage: vi.fn(async ({ to }) => ({
+        provider: "photon" as const,
+        platform: "imessage" as const,
+        to,
+        messageId: `msg_${to}`,
+        spaceId: `space_${to}`
+      }))
+    };
+    const openai = {
+      chat: {
+        completions: {
+          create: vi.fn(async () => ({
+            choices: [{ message: { content: "caught in 4k. lock in." } }]
+          }))
+        }
+      }
+    };
+    const { app } = makeApp({ focusProvider, messageSender, openai });
+
+    await request(app)
+      .post("/session/start")
+      .send({
+        userPhone,
+        mode: "guardian",
+        interventionLevel: "snitch",
+        contactPhone
+      })
+      .expect(200);
+
+    await request(app)
+      .post("/judge")
+      .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
+      .field("userPhone", userPhone)
+      .field("graceMs", "-1")
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.action).toMatchObject({ type: "checkin" });
+      });
+
+    sessions.resetForTests();
+
+    const escalation = await request(app)
+      .post("/judge")
+      .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
+      .field("userPhone", userPhone)
+      .field("graceMs", "-1")
+      .expect(200);
+
+    expect(escalation.body.action).toMatchObject({ type: "escalate", level: "snitch" });
+    expect(escalation.body.escalation).toMatchObject({ sent: true, to: contactPhone });
+  });
+
+  it("uses session settings to snitch to the accountability contact", async () => {
+    const userPhone = "+15550002001";
+    const contactPhone = "+15550002002";
+    const focusProvider: VisionProvider = {
+      isFocused: vi.fn(async () => ({
+        status: "off_task" as const,
+        isFocused: false,
+        destructiveCategory: null,
+        confidence: 0.91,
+        reason: "doomscrolling tiktok",
+        provider: "openrouter",
+        model: "test-model"
+      }))
+    };
+    const messageSender: MessageSender = {
+      sendMessage: vi.fn(async ({ to }) => ({
+        provider: "photon" as const,
+        platform: "imessage" as const,
+        to,
+        messageId: `msg_${to}`,
+        spaceId: `space_${to}`
+      }))
+    };
+    const openai = {
+      chat: {
+        completions: {
+          create: vi.fn(async () => ({
+            choices: [{ message: { content: "caught in 4k. lock in." } }]
+          }))
+        }
+      }
+    };
+    const { app } = makeApp({ focusProvider, messageSender, openai });
+
+    const start = await request(app)
+      .post("/session/start")
+      .send({
+        userPhone,
+        mode: "guardian",
+        interventionLevel: "snitch",
+        contactPhone
+      })
+      .expect(200);
+    expect(start.body.session).toMatchObject({ interventionLevel: "snitch", contactPhone });
+
+    await request(app)
+      .post("/judge")
+      .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
+      .field("userPhone", userPhone)
+      .field("graceMs", "-1")
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.action).toMatchObject({ type: "checkin" });
+      });
+
+    const escalation = await request(app)
+      .post("/judge")
+      .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
+      .field("userPhone", userPhone)
+      .field("graceMs", "-1")
+      .expect(200);
+
+    expect(escalation.body.action).toMatchObject({ type: "escalate", level: "snitch" });
+    expect(escalation.body.escalation).toMatchObject({
+      sent: true,
+      to: contactPhone,
+      message: "caught in 4k. lock in."
+    });
+    expect(messageSender.sendMessage).toHaveBeenLastCalledWith({
+      to: contactPhone,
+      message: "caught in 4k. lock in."
+    });
+  });
 });
 
 describe("POST /session/end", () => {
@@ -233,7 +423,8 @@ describe("POST /session/end", () => {
     expect(res.body).toEqual({ ended: true, memoriesAdded: 0 });
     expect(openai.chat.completions.create).not.toHaveBeenCalled();
 
-    // session should be gone
+    // session should be gone from both memory and durable live_sessions storage
+    sessions.resetForTests();
     const session = await request(app).get(`/session/${encodeURIComponent(PHONE)}`).expect(200);
     expect(session.body.active).toBe(false);
   });

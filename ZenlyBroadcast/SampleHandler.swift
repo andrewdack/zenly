@@ -8,13 +8,13 @@
 import ReplayKit
 import CoreImage
 import UIKit
-import UserNotifications
 
 class SampleHandler: RPBroadcastSampleHandler {
 
     private static let appGroupIdentifier = "group.com.andrewh.zenly"
     private static let frameFileName = "latest_frame.jpg"
     private static let userPhoneKey = "userPhone"   // written by the main app's SessionStore
+    private static let sessionActiveKey = "sessionActive"
     private static let jpegQuality: CGFloat = 0.5
 
     // Keep this in sync with API_BASE_URL in Zenly/ContentView.swift.
@@ -52,6 +52,10 @@ class SampleHandler: RPBroadcastSampleHandler {
         UserDefaults(suiteName: Self.appGroupIdentifier)?.string(forKey: Self.userPhoneKey)
     }
 
+    private var sessionActive: Bool {
+        UserDefaults(suiteName: Self.appGroupIdentifier)?.bool(forKey: Self.sessionActiveKey) ?? false
+    }
+
     override func broadcastStarted(withSetupInfo setupInfo: [String : NSObject]?) {
         stateLock.lock()
         lastUploadAt = .distantPast
@@ -77,6 +81,10 @@ class SampleHandler: RPBroadcastSampleHandler {
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
         guard sampleBufferType == .video else { return }
 
+        // Once the app ends the session, keep the system broadcast alive but stop
+        // writing/uploading frames until a new deep-link session starts.
+        guard sessionActive, let phone = userPhone, !phone.isEmpty else { return }
+
         // Throttle, and never overlap with an in-flight upload.
         let now = Date()
         stateLock.lock()
@@ -98,12 +106,6 @@ class SampleHandler: RPBroadcastSampleHandler {
             try? jpegData.write(to: frameURL, options: .atomic)
         }
 
-        // No identity yet (the user hasn't tapped the deep link) — nothing to judge against.
-        guard let phone = userPhone, !phone.isEmpty else {
-            finishUpload()
-            return
-        }
-
         upload(jpegData: jpegData, userPhone: phone)
     }
 
@@ -123,18 +125,10 @@ class SampleHandler: RPBroadcastSampleHandler {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = multipartBody(boundary: boundary, jpegData: jpegData, userPhone: userPhone)
 
-        // The escalation iMessage is sent server-side. We also post a local banner here
-        // (the extension stays alive while recording, unlike the suspended main app) so
-        // the user gets an on-device popup the moment they're flagged off task.
-        let task = urlSession.dataTask(with: request) { [weak self] data, _, _ in
-            guard let self else { return }
-            self.finishUpload()
-            guard let data,
-                  let result = try? JSONDecoder().decode(JudgeResult.self, from: data) else { return }
-            if result.action?.type == "checkin" || result.action?.type == "escalate" {
-                let reason = result.action?.reason ?? result.verdict?.reason ?? "you're off task"
-                self.postOffTaskNotification(reason: reason)
-            }
+        // The escalation/check-in iMessage is sent server-side, so the extension only
+        // needs to finish the upload bookkeeping here.
+        let task = urlSession.dataTask(with: request) { [weak self] _, _, _ in
+            self?.finishUpload()
         }
         task.resume()
     }
@@ -143,19 +137,6 @@ class SampleHandler: RPBroadcastSampleHandler {
         stateLock.lock()
         isUploading = false
         stateLock.unlock()
-    }
-
-    private func postOffTaskNotification(reason: String) {
-        let content = UNMutableNotificationContent()
-        content.title = "Zenly"
-        content.body = "lock back in — \(reason)"
-        content.sound = .default
-        let request = UNNotificationRequest(
-            identifier: "zenly-offtask-\(UUID().uuidString)",
-            content: content,
-            trigger: nil   // deliver immediately
-        )
-        UNUserNotificationCenter.current().add(request)
     }
 
     private func multipartBody(boundary: String, jpegData: Data, userPhone: String) -> Data {
@@ -170,12 +151,4 @@ class SampleHandler: RPBroadcastSampleHandler {
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         return body
     }
-}
-
-/// Minimal view of POST /judge's response — just what we need to decide on a banner.
-private struct JudgeResult: Decodable {
-    struct Verdict: Decodable { let status: String?; let reason: String? }
-    struct Action: Decodable { let type: String?; let level: String?; let reason: String? }
-    let verdict: Verdict?
-    let action: Action?
 }

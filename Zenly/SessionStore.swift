@@ -1,10 +1,10 @@
 import Foundation
 import Observation
-import UserNotifications
 
 enum AppGroup {
     static let identifier = "group.com.andrewh.zenly"
     static let latestFrameFileName = "latest_frame.jpg"
+    static let sessionActiveKey = "sessionActive"
 
     static var container: UserDefaults? { UserDefaults(suiteName: identifier) }
     static var fileContainer: URL? {
@@ -18,7 +18,6 @@ enum AppGroup {
 
 enum InterventionLevel: String, CaseIterable, Identifiable {
     case nudge  = "Nudge"
-    case block  = "Block"
     case snitch = "Snitch"
     var id: String { rawValue }
 
@@ -27,7 +26,6 @@ enum InterventionLevel: String, CaseIterable, Identifiable {
     var blurb: String {
         switch self {
         case .nudge:  return "a gentle notification when you drift off task"
-        case .block:  return "shields the distracting app so you can't open it"
         case .snitch: return "texts your accountability buddy when you slip 💀"
         }
     }
@@ -99,6 +97,7 @@ final class SessionStore {
         static let interventionLevel = "interventionLevel"
         static let contactPhone = "contactPhone"
         static let userPhone = "userPhone"
+        static let sessionActive = AppGroup.sessionActiveKey
     }
 
     init() {
@@ -108,6 +107,7 @@ final class SessionStore {
         interventionLevel = stored.flatMap(InterventionLevel.init(rawValue:)) ?? .nudge
         contactPhone = d?.string(forKey: Keys.contactPhone) ?? ""
         userPhone = d?.string(forKey: Keys.userPhone) ?? ""
+        setBroadcastSessionActive(false)
     }
 
     @discardableResult
@@ -139,11 +139,17 @@ final class SessionStore {
         snitchCount = 0
         lastJudgeReason = ""
         lastJudgeAction = "none"
+        setBroadcastSessionActive(true)
+        syncSessionWithBackend(mode: mode, task: task, durationMinutes: durationMinutes)
         startJudgeLoop()
     }
 
     func end() {
         stopJudgeLoop()
+        setBroadcastSessionActive(false)
+        if let frameURL = AppGroup.latestFrameURL {
+            try? FileManager.default.removeItem(at: frameURL)
+        }
         if !userPhone.isEmpty {
             let phone = userPhone
             Task {
@@ -243,9 +249,6 @@ final class SessionStore {
         switch response.action.level?.lowercased() {
         case "nudge":
             nudgeCount += 1
-            sendLocalNudge(reason: response.action.reason ?? response.verdict.reason)
-        case "block":
-            judgeStatusText = "block requested — shield deferred"
         case "snitch":
             snitchCount += 1
             judgeStatusText = "snitch sent server-side"
@@ -273,22 +276,32 @@ final class SessionStore {
         }
     }
 
-    private func sendLocalNudge(reason: String) {
-        let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            guard granted else { return }
+    private func setBroadcastSessionActive(_ active: Bool) {
+        defaults?.set(active, forKey: Keys.sessionActive)
+    }
 
-            let content = UNMutableNotificationContent()
-            content.title = "Zenly"
-            content.body = "lock back in — \(reason)"
-            content.sound = .default
+    private func syncSessionWithBackend(mode: FocusMode, task: String, durationMinutes: Int?) {
+        guard !userPhone.isEmpty else { return }
 
-            let request = UNNotificationRequest(
-                identifier: "zenly-nudge-\(UUID().uuidString)",
-                content: content,
-                trigger: nil
-            )
-            center.add(request)
+        let phone = userPhone
+        let level = interventionLevel
+        let contact = contactPhone
+        let name = userName
+        Task {
+            do {
+                _ = try await apiClient.startSession(
+                    userPhone: phone,
+                    mode: mode,
+                    task: task,
+                    durationMinutes: durationMinutes,
+                    interventionLevel: level,
+                    contactPhone: contact,
+                    name: name
+                )
+            } catch {
+                judgeStatusText = "session sync failed"
+                lastJudgeReason = error.localizedDescription
+            }
         }
     }
 }

@@ -13,7 +13,7 @@ import { startLink } from "./util/deeplink.js";
 import type { InterventionLevel, Session, SessionMode } from "./types.js";
 import type OpenAI from "openai";
 
-const INTERVENTION_LEVELS: InterventionLevel[] = ["nudge", "block", "snitch"];
+const INTERVENTION_LEVELS: InterventionLevel[] = ["nudge", "snitch"];
 
 const e164PhoneNumberSchema = z
   .string()
@@ -289,7 +289,7 @@ export function createApp(options: CreateAppOptions) {
           sessions.recordNudge(userPhone);
           profile.logEvent(userPhone, "nudge", verdict.reason);
         }
-        // nudge + block are applied on-device by the app from `action`.
+        // nudge is applied on-device by the app from `action`; snitch is sent server-side.
       }
 
       res.json({ verdict, action, escalation, stats: sessions.get(userPhone).stats });
