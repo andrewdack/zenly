@@ -23,7 +23,6 @@ ZenlyBroadcast/          # ReplayKit RPBroadcastSampleHandler (screen capture)  
 ZenlyBroadcastSetupUI/   # ReplayKit setup UI extension                         [App Groups]
 ZenlyActivity/           # DeviceActivityMonitor extension (shield)             [Family Controls — PAID ONLY]
 ZenlyTests/ ZenlyUITests/
-backend/                 # legacy reference only — do not use
 api/                     # canonical Node.js + Express + TypeScript server
 ```
 
@@ -107,7 +106,13 @@ shield also needs a **paid account**. Phases 1–4 demo fine on the simulator.
 
 ## API server (`api/`)
 
-TypeScript + Node + Express. **`api/` is the canonical server.** `backend/` is legacy reference.
+TypeScript + Node + Express. **`api/` is the only server** (the old `backend/` reference
+implementation has been removed).
+
+**Agent number**: the Zenly agent runs on **Photon/Spectrum** at iMessage number
+**`4156055838`** — this is what users text to start a session. It's hardcoded in the iOS app as
+`MAC_IMESSAGE_HANDLE` in `Zenly/ContentView.swift` (the "text the agent" button opens
+`sms:4156055838`). No local Mac is required for Photon mode.
 
 **LLM**: everything goes through **OpenRouter** (OpenAI-compatible) — one `OPENROUTER_API_KEY`
 covers both vision (focus judge) and agent chat. Model is configurable per role.
