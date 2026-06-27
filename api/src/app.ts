@@ -8,6 +8,7 @@ import type { MessageSender } from "./services/messageSender.js";
 import type { VisionProvider } from "./services/visionProvider.js";
 import { CHECKIN_SYSTEM, checkInPrompt, SNITCH_SYSTEM, snitchPrompt } from "./prompts.js";
 import * as sessions from "./store/sessions.js";
+import * as profile from "./store/profile.js";
 import { startLink } from "./util/deeplink.js";
 import type { InterventionLevel, Session, SessionMode } from "./types.js";
 import type OpenAI from "openai";
@@ -131,7 +132,7 @@ export function createApp(options: CreateAppOptions) {
   app.post(
     "/session/start",
     asyncHandler(async (req, res) => {
-      const { userPhone, task, durationMinutes, mode, interventionLevel, contactPhone } = req.body ?? {};
+      const { userPhone, task, durationMinutes, mode, interventionLevel, contactPhone, name } = req.body ?? {};
       if (!userPhone) throw new HttpError(400, "userPhone is required", "missing_fields");
 
       const resolvedMode: SessionMode = mode === "guardian" ? "guardian" : "task";
@@ -148,11 +149,14 @@ export function createApp(options: CreateAppOptions) {
         durationMinutes: resolvedMode === "guardian" ? null : mins,
       };
 
+      // Explicit identity from the app keeps the profile in sync with the agent.
+      if (name) profile.upsertUser(String(userPhone), { name: String(name) });
+
       const session = sessions.startSession(String(userPhone), parsed, {
         interventionLevel: level,
         contactPhone: contactPhone ? String(contactPhone) : null,
       });
-      res.json({ session, deeplink: startLink(deeplinkScheme, parsed) });
+      res.json({ session, deeplink: startLink(deeplinkScheme, parsed, String(userPhone)) });
     })
   );
 
@@ -166,7 +170,7 @@ export function createApp(options: CreateAppOptions) {
         active: true,
         session,
         stats: sessions.get(phone).stats,
-        deeplink: startLink(deeplinkScheme, session),
+        deeplink: startLink(deeplinkScheme, session, phone),
       });
     })
   );
@@ -193,6 +197,8 @@ export function createApp(options: CreateAppOptions) {
         task: session.task,
       });
 
+      profile.logVerdict(userPhone, verdict.status, verdict.destructiveCategory, verdict.reason, session.mode);
+
       const graceMs = req.body.graceMs ? Number(req.body.graceMs) : undefined;
       const action = sessions.recordVerdict(
         userPhone, verdict.status, verdict.reason, Date.now(),
@@ -204,6 +210,7 @@ export function createApp(options: CreateAppOptions) {
       if (action.type === "checkin") {
         const message = await generateCheckIn(session, action.reason);
         sessions.appendTurn(userPhone, "assistant", message); // so their reply lands in context
+        profile.logEvent(userPhone, "checkin", message);
         try {
           await messageSender.sendMessage({ to: userPhone, message });
           escalation = { sent: true, to: userPhone, message };
@@ -217,6 +224,7 @@ export function createApp(options: CreateAppOptions) {
           try {
             await messageSender.sendMessage({ to: session.contactPhone, message });
             sessions.recordSnitch(userPhone);
+            profile.logEvent(userPhone, "snitch", message);
             escalation = { sent: true, to: session.contactPhone, message };
           } catch (err) {
             console.error("[judge] snitch send failed:", err);
@@ -224,6 +232,7 @@ export function createApp(options: CreateAppOptions) {
           }
         } else if (action.level === "nudge") {
           sessions.recordNudge(userPhone);
+          profile.logEvent(userPhone, "nudge", verdict.reason);
         }
         // nudge + block are applied on-device by the app from `action`.
       }

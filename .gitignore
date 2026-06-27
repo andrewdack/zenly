@@ -11,6 +11,12 @@ DerivedData/
 node_modules/
 *.log
 
+# SQLite (local user profiles + memory)
+api/data/
+*.db
+*.db-wal
+*.db-shm
+
 # Secrets
 .env
 .env.local
