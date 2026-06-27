@@ -143,28 +143,83 @@ struct ActiveSessionView: View {
     @Environment(SessionStore.self) private var store
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 28) {
             Text(session.task)
                 .font(.title2.bold())
                 .multilineTextAlignment(.center)
 
-            Label(store.onTask ? "On task" : "Off task",
+            TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
+                TimerRing(session: session, now: context.date, onTask: store.onTask)
+            }
+
+            Label(store.onTask ? "on task" : "off task",
                   systemImage: store.onTask ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundStyle(store.onTask ? .green : .orange)
                 .font(.headline)
 
-            if let endsAt = session.endsAt {
-                Text("Ends \(endsAt.formatted(date: .omitted, time: .shortened))")
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("No time limit")
-                    .foregroundStyle(.secondary)
-            }
-
-            Button("End session", role: .destructive) { store.end() }
+            Button("end session", role: .destructive) { store.end() }
                 .buttonStyle(.borderedProminent)
         }
         .padding()
+    }
+}
+
+/// Circular timer. Counts down for timed sessions, counts elapsed up for indefinite ones.
+struct TimerRing: View {
+    let session: FocusSession
+    let now: Date
+    let onTask: Bool
+
+    private var elapsed: TimeInterval {
+        max(0, now.timeIntervalSince(session.startedAt))
+    }
+
+    /// Fraction complete (0...1) for timed sessions, else nil.
+    private var progress: Double? {
+        guard let total = session.durationMinutes.map({ Double($0 * 60) }), total > 0
+        else { return nil }
+        return min(1, elapsed / total)
+    }
+
+    /// Seconds left for timed sessions, else nil.
+    private var remaining: TimeInterval? {
+        guard let total = session.durationMinutes.map({ Double($0 * 60) }) else { return nil }
+        return max(0, total - elapsed)
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(.quaternary, lineWidth: 12)
+
+            if let progress {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(onTask ? Color.accentColor : .orange,
+                            style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut, value: progress)
+            }
+
+            VStack(spacing: 4) {
+                Text(clockString(remaining ?? elapsed))
+                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Text(remaining == nil ? "elapsed" : "remaining")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 220, height: 220)
+    }
+
+    private func clockString(_ interval: TimeInterval) -> String {
+        let total = Int(interval.rounded())
+        let h = total / 3600, m = (total % 3600) / 60, s = total % 60
+        return h > 0
+            ? String(format: "%d:%02d:%02d", h, m, s)
+            : String(format: "%02d:%02d", m, s)
     }
 }
 
