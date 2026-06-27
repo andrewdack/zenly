@@ -1,6 +1,7 @@
 export interface FocusImageInput {
   image: Buffer;
   mimeType: string;
+  task?: string;
 }
 
 export interface FocusResult {

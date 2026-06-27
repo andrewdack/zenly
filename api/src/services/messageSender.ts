@@ -4,8 +4,8 @@ export interface SendMessageInput {
 }
 
 export interface SendMessageResult {
-  provider: "photon";
-  platform: "imessage";
+  provider: string;
+  platform: string;
   to: string;
   messageId?: string;
   spaceId?: string;

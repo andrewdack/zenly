@@ -6,6 +6,10 @@ import { asyncHandler, HttpError } from "./http.js";
 import { openApiDocument, swaggerHtml } from "./openapi.js";
 import type { MessageSender } from "./services/messageSender.js";
 import type { VisionProvider } from "./services/visionProvider.js";
+import { SNITCH_SYSTEM, snitchPrompt } from "./prompts.js";
+import * as sessions from "./store/sessions.js";
+import { startLink } from "./util/deeplink.js";
+import type OpenAI from "openai";
 
 const e164PhoneNumberSchema = z
   .string()
@@ -21,10 +25,15 @@ const sendMessageSchema = z
 export interface CreateAppOptions {
   focusProvider: VisionProvider;
   messageSender: MessageSender;
+  openai: OpenAI;
+  agentModel: string;
+  snitchModel: string;
+  deeplinkScheme: string;
   maxImageBytes?: number;
 }
 
 export function createApp(options: CreateAppOptions) {
+  const { focusProvider, messageSender, openai, snitchModel, deeplinkScheme } = options;
   const app = express();
   const upload = multer({
     storage: multer.memoryStorage(),
@@ -61,9 +70,10 @@ export function createApp(options: CreateAppOptions) {
         throw new HttpError(400, "uploaded file must be an image", "invalid_image_type");
       }
 
-      const result = await options.focusProvider.isFocused({
+      const result = await focusProvider.isFocused({
         image: req.file.buffer,
-        mimeType: req.file.mimetype
+        mimeType: req.file.mimetype,
+        task: req.body.task as string | undefined,
       });
 
       res.json(result);
@@ -74,12 +84,67 @@ export function createApp(options: CreateAppOptions) {
     "/sendMessage",
     asyncHandler(async (req, res) => {
       const input = sendMessageSchema.parse(req.body);
-      const result = await options.messageSender.sendMessage(input);
+      const result = await messageSender.sendMessage(input);
+      res.json({ sent: true, ...result });
+    })
+  );
 
+  // ── Sessions ──────────────────────────────────────────────────────────────
+  app.post(
+    "/session/start",
+    asyncHandler(async (req, res) => {
+      const { userPhone, task, durationMinutes } = req.body ?? {};
+      if (!userPhone || !task)
+        throw new HttpError(400, "userPhone and task are required", "missing_fields");
+      const mins = durationMinutes ? parseInt(String(durationMinutes), 10) : null;
+      const session = sessions.startSession(String(userPhone), { task: String(task), durationMinutes: mins });
+      res.json({ session, deeplink: startLink(deeplinkScheme, { task: String(task), durationMinutes: mins }) });
+    })
+  );
+
+  app.get(
+    "/session/:phone",
+    asyncHandler(async (req, res) => {
+      const phone = String(req.params.phone);
+      const session = sessions.getSession(phone);
+      if (!session) { res.json({ active: false }); return; }
       res.json({
-        sent: true,
-        ...result
+        active: true,
+        session,
+        stats: sessions.get(phone).stats,
+        deeplink: startLink(deeplinkScheme, { task: session.task, durationMinutes: session.durationMinutes }),
       });
+    })
+  );
+
+  // ── Snitch ────────────────────────────────────────────────────────────────
+  app.post(
+    "/snitch",
+    asyncHandler(async (req, res) => {
+      const { task, contactPhone, screenContent, userPhone } = req.body ?? {};
+      if (!task || !contactPhone || !screenContent)
+        throw new HttpError(400, "task, contactPhone, and screenContent are required", "missing_fields");
+
+      let message: string;
+      try {
+        const completion = await openai.chat.completions.create({
+          model: snitchModel,
+          max_tokens: 120,
+          messages: [
+            { role: "system", content: SNITCH_SYSTEM },
+            { role: "user", content: snitchPrompt(task as string, screenContent as string) },
+          ],
+        });
+        message = completion.choices[0]?.message?.content?.trim() ?? "";
+      } catch { message = ""; }
+
+      if (!message) {
+        message = `your friend swore they'd be "${task}" but got caught ${screenContent}. just so you know 👀`;
+      }
+
+      const result = await messageSender.sendMessage({ to: contactPhone as string, message });
+      if (userPhone) sessions.recordSnitch(userPhone as string);
+      res.json({ message, ...result });
     })
   );
 
