@@ -71,8 +71,12 @@ if (localMessenger) {
 
   sdk
     .startWatching({
+      onIncomingMessage: (msg) => {
+        console.log(`[watcher] incoming: from=${msg.participant} chatId=${msg.chatId} text=${msg.text?.slice(0, 60)}`);
+      },
       onDirectMessage: async (msg) => {
         const { participant: from, text, chatId } = msg;
+        console.log(`[watcher] direct: from=${from} chatId=${chatId} text=${text?.slice(0, 60)}`);
         if (!text || !from || !chatId) return;
         console.log(`[agent] <- ${from}: ${text.slice(0, 80)}`);
         const reply = await handleMessage(from, text.trim());
