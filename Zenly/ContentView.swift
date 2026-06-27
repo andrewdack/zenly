@@ -8,240 +8,500 @@ struct ContentView: View {
     @State private var showingSettings = false
 
     var body: some View {
-        Group {
-            if let session = store.session {
-                ActiveSessionView(session: session)
+        ZenlyShell {
+            if showingSettings {
+                SettingsScreen(onDone: { showingSettings = false })
+            } else if let session = store.session {
+                RunningSessionView(session: session)
             } else {
-                WaitingView(showingSettings: $showingSettings)
+                HomeScreen(onEditSettings: { showingSettings = true })
             }
         }
         .onAppear {
             if store.needsSetup { showingSettings = true }
         }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
-        }
+        .animation(.easeInOut(duration: 0.22), value: store.session != nil)
+        .animation(.easeInOut(duration: 0.22), value: showingSettings)
     }
 }
 
-struct WaitingView: View {
-    @Environment(SessionStore.self) private var store
-    @Environment(\.openURL) private var openURL
-    @Binding var showingSettings: Bool
+// MARK: - Shell (cloud background + dark fog)
+
+private struct ZenlyShell<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
+        content
+            .foregroundStyle(.white)
+            .padding(.horizontal, 32)
+            .padding(.vertical, 42)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(alignment: .center) {
+                ZStack {
+                    Color.black
 
-            Image(systemName: "moon.zzz.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(.tint)
-            Text("zenly")
-                .font(.largeTitle.bold())
-            Text("text us to kick off a focus session — tell us what you're working on and for how long.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+                    Image("ZenlyCloud")
+                        .resizable()
+                        .scaledToFill()
+                        .saturation(0)
+                        .contrast(0.9)
+                        .opacity(0.22)
+                        .blur(radius: 2)
 
-            Button {
-                openAgentChat()
-            } label: {
-                Label("text the agent", systemImage: "message.fill")
-                    .frame(maxWidth: .infinity)
+                    // Strong scrim: the cloud has bright puffs, so keep it dim
+                    // enough that white type always reads.
+                    LinearGradient(
+                        colors: [
+                            .black.opacity(0.45),
+                            .black.opacity(0.30),
+                            .black.opacity(0.58)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+                .ignoresSafeArea()
             }
-            .buttonStyle(.borderedProminent)
+            .preferredColorScheme(.dark)
+    }
+}
+
+// MARK: - Home / waiting screen
+
+private struct HomeScreen: View {
+    @Environment(SessionStore.self) private var store
+    @Environment(\.openURL) private var openURL
+    let onEditSettings: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Zenly.")
+                .font(.redaction(size: 58, weight: .bold))
+                .tracking(-1.2)
+                .padding(.top, 8)
+
+            Text("text us to start a focus session.\nwe send back a link that kicks it off.")
+                .font(.redactionItalic(size: 20))
+                .lineSpacing(3)
+                .opacity(0.82)
+                .padding(.top, 22)
+                .frame(maxWidth: 320, alignment: .leading)
+
+            Button(action: textTheAgent) {
+                Text("text the agent")
+                    .font(.redaction(size: 40, weight: .bold))
+                    .frame(maxWidth: .infinity, minHeight: 132)
+            }
+            .buttonStyle(ZenlyStartButtonStyle())
             .disabled(MAC_IMESSAGE_HANDLE.isEmpty)
-            .padding(.horizontal, 40)
+            .opacity(MAC_IMESSAGE_HANDLE.isEmpty ? 0.55 : 1)
+            .padding(.top, 44)
 
             Spacer()
 
-            settingsSummary
+            SettingsSummary(onEdit: onEditSettings)
+
+            Text("choose your consequence")
+                .font(.redactionItalic(size: 16))
+                .opacity(0.7)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 18)
         }
-        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var settingsSummary: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("intervention")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(store.interventionLevel.label)
-            }
-            HStack {
-                Text("accountability buddy")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(store.contactPhone.isEmpty ? "not set" : store.contactPhone)
-                    .foregroundStyle(store.contactPhone.isEmpty ? .orange : .primary)
-            }
-            Button("edit settings") { showingSettings = true }
-                .font(.footnote)
-                .padding(.top, 4)
-        }
-        .font(.footnote)
-        .padding()
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private func openAgentChat() {
-        let handle = MAC_IMESSAGE_HANDLE
-        guard !handle.isEmpty,
-              let url = URL(string: "sms:\(handle)") else { return }
+    private func textTheAgent() {
+        guard !MAC_IMESSAGE_HANDLE.isEmpty,
+              let url = URL(string: "sms:\(MAC_IMESSAGE_HANDLE)") else { return }
         openURL(url)
     }
 }
 
-struct SettingsView: View {
+private struct SettingsSummary: View {
     @Environment(SessionStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
+    let onEdit: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SummaryRow(key: "mode", value: store.interventionLevel.rawValue.lowercased())
+            SummaryRow(key: "witness",
+                       value: store.contactPhone.isEmpty ? "not set" : store.contactPhone)
+
+            Button(action: onEdit) {
+                Text("edit settings ›")
+                    .font(.redactionItalic(size: 17))
+                    .opacity(0.88)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(Rectangle().stroke(.white.opacity(0.85), lineWidth: 1.6))
+    }
+}
+
+private struct SummaryRow: View {
+    let key: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(key)
+                .font(.redactionItalic(size: 18))
+                .opacity(0.72)
+            Spacer()
+            Text(value)
+                .font(.redaction(size: 20, weight: .bold))
+        }
+    }
+}
+
+// MARK: - Settings (first launch + editable)
+
+private struct SettingsScreen: View {
+    @Environment(SessionStore.self) private var store
+    let onDone: () -> Void
 
     var body: some View {
         @Bindable var store = store
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("phone number", text: $store.contactPhone)
-                        .keyboardType(.phonePad)
-                        .textContentType(.telephoneNumber)
-                } header: {
-                    Text("accountability buddy")
-                } footer: {
-                    Text("who we text when you go off the rails. lives only on your phone.")
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Zenly.")
+                .font(.redaction(size: 58, weight: .bold))
+                .tracking(-1.2)
+                .padding(.top, 8)
 
-                Section {
-                    Picker("level", selection: $store.interventionLevel) {
-                        ForEach(InterventionLevel.allCases) { level in
-                            Text(level.label).tag(level)
-                        }
+            Text("set up your accountability.")
+                .font(.redactionItalic(size: 20))
+                .opacity(0.82)
+                .padding(.top, 18)
+
+            Text("witness")
+                .font(.redactionItalic(size: 18))
+                .opacity(0.7)
+                .padding(.top, 40)
+            PhoneField(text: $store.contactPhone)
+                .padding(.top, 10)
+            Text("who we text when you wander off. stays on your phone.")
+                .font(.redactionItalic(size: 15))
+                .opacity(0.66)
+                .padding(.top, 8)
+
+            Text("consequence")
+                .font(.redactionItalic(size: 18))
+                .opacity(0.7)
+                .padding(.top, 34)
+
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(InterventionLevel.allCases) { level in
+                    Button {
+                        store.interventionLevel = level
+                    } label: {
+                        ModeRow(level: level, selected: store.interventionLevel == level)
                     }
-                    .pickerStyle(.segmented)
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 12)
 
-                    Text(store.interventionLevel.blurb)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("when you drift off task")
-                }
+            Text(store.interventionLevel.detail)
+                .font(.redactionItalic(size: 17))
+                .lineSpacing(2)
+                .opacity(0.8)
+                .padding(.top, 14)
+                .frame(maxWidth: 320, alignment: .leading)
+
+            Spacer()
+
+            Button(action: onDone) {
+                Text("done")
+                    .font(.redaction(size: 30, weight: .bold))
+                    .frame(maxWidth: .infinity, minHeight: 64)
             }
-            .navigationTitle("settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("done") { dismiss() }
-                        .disabled(store.contactPhone.isEmpty)
-                }
-            }
+            .buttonStyle(ZenlyOutlineButtonStyle())
+            .disabled(store.contactPhone.isEmpty)
+            .opacity(store.contactPhone.isEmpty ? 0.45 : 1)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-struct ActiveSessionView: View {
+private struct ModeRow: View {
+    let level: InterventionLevel
+    let selected: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Rectangle()
+                .fill(selected ? .white : .clear)
+                .frame(width: 13, height: 13)
+                .overlay(Rectangle().stroke(.white, lineWidth: 1.6))
+
+            HStack(spacing: 8) {
+                Text("The")
+                    .font(.redaction(size: 34, weight: .bold))
+                Text(level.rawValue.lowercased())
+                    .font(.redactionItalic(size: 34))
+            }
+            .opacity(selected ? 1 : 0.6)
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Running session (live timer)
+
+private struct RunningSessionView: View {
     let session: FocusSession
     @Environment(SessionStore.self) private var store
 
     var body: some View {
-        VStack(spacing: 28) {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 9, height: 9)
+                    .shadow(color: .white.opacity(0.7), radius: 7)
+                Text("session running")
+                    .font(.redactionItalic(size: 18))
+                    .opacity(0.86)
+            }
+            .padding(.top, 8)
+
+            Text(store.interventionLevel.rawValue)
+                .font(.redaction(size: 60, weight: .bold))
+                .tracking(-0.8)
+                .padding(.top, 36)
+
+            Text("currently focusing on")
+                .font(.redactionItalic(size: 20))
+                .opacity(0.82)
+                .padding(.top, 26)
+
             Text(session.task)
-                .font(.title2.bold())
-                .multilineTextAlignment(.center)
+                .font(.redaction(size: 32, weight: .bold))
+                .lineSpacing(5)
+                .padding(16)
+                .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+                .overlay(Rectangle().stroke(.white, lineWidth: 2))
+                .padding(.top, 10)
 
             TimelineView(.periodic(from: session.startedAt, by: 1)) { context in
-                TimerRing(session: session, now: context.date, onTask: store.onTask)
+                TimerBlock(session: session, now: context.date)
             }
+            .padding(.top, 22)
 
-            Label(store.onTask ? "on task" : "off task",
-                  systemImage: store.onTask ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(store.onTask ? .green : .orange)
-                .font(.headline)
-                #if DEBUG
-                .onTapGesture { store.onTask.toggle() }  // debug: simulate focus judge
-                #endif
+            Spacer()
 
-            Button("end session", role: .destructive) { store.end() }
-                .buttonStyle(.borderedProminent)
+            HStack(spacing: 16) {
+                SessionSignal(active: store.onTask)
+                    #if DEBUG
+                    .onTapGesture { store.onTask.toggle() }  // debug: simulate focus judge
+                    #endif
+
+                Spacer()
+
+                Button("end") { store.end() }
+                    .font(.redactionItalic(size: 24))
+                    .foregroundStyle(.white)
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .overlay(Rectangle().stroke(.white, lineWidth: 1.5))
+            }
+            .padding(.bottom, 12)
         }
-        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// Circular timer. Counts down for timed sessions, counts elapsed up for indefinite ones.
-struct TimerRing: View {
+/// Live countdown for timed sessions (with a brutalist progress bar), elapsed for indefinite.
+private struct TimerBlock: View {
     let session: FocusSession
     let now: Date
-    let onTask: Bool
 
-    private var elapsed: TimeInterval {
-        max(0, now.timeIntervalSince(session.startedAt))
+    private var elapsed: TimeInterval { max(0, now.timeIntervalSince(session.startedAt)) }
+
+    private var total: TimeInterval? {
+        session.durationMinutes.map { Double($0 * 60) }
     }
 
-    /// Fraction complete (0...1) for timed sessions, else nil.
     private var progress: Double? {
-        guard let total = session.durationMinutes.map({ Double($0 * 60) }), total > 0
-        else { return nil }
+        guard let total, total > 0 else { return nil }
         return min(1, elapsed / total)
     }
 
-    /// Seconds left for timed sessions, else nil.
-    private var remaining: TimeInterval? {
-        guard let total = session.durationMinutes.map({ Double($0 * 60) }) else { return nil }
+    private var displayed: TimeInterval {
+        guard let total else { return elapsed }
         return max(0, total - elapsed)
     }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(.quaternary, lineWidth: 12)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(clockString(displayed))
+                    .font(.redaction(size: 52, weight: .bold))
+                Text(progress == nil ? "elapsed" : "remaining")
+                    .font(.redactionItalic(size: 17))
+                    .opacity(0.72)
+            }
 
             if let progress {
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(onTask ? Color.accentColor : .orange,
-                            style: StrokeStyle(lineWidth: 12, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .animation(.easeInOut, value: progress)
-            }
-
-            VStack(spacing: 4) {
-                Text(clockString(remaining ?? elapsed))
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                Text(remaining == nil ? "elapsed" : "remaining")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Rectangle().fill(.white.opacity(0.12))
+                        Rectangle()
+                            .fill(.white)
+                            .frame(width: geo.size.width * progress)
+                            .animation(.easeInOut, value: progress)
+                    }
+                    .overlay(Rectangle().stroke(.white, lineWidth: 2))
+                }
+                .frame(height: 16)
             }
         }
-        .frame(width: 220, height: 220)
     }
 
     private func clockString(_ interval: TimeInterval) -> String {
-        let total = Int(interval.rounded())
-        let h = total / 3600, m = (total % 3600) / 60, s = total % 60
+        let t = Int(interval.rounded())
+        let h = t / 3600, m = (t % 3600) / 60, s = t % 60
         return h > 0
             ? String(format: "%d:%02d:%02d", h, m, s)
             : String(format: "%02d:%02d", m, s)
     }
 }
 
-#Preview("Waiting") {
+private struct SessionSignal: View {
+    let active: Bool
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Rectangle()
+                .fill(active ? .white : .clear)
+                .frame(width: 11, height: 11)
+                .overlay(Rectangle().stroke(.white, lineWidth: 1.4))
+            Text(active ? "on task" : "off task")
+                .font(.redactionItalic(size: 18))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .foregroundStyle(active ? .white : Color.zenlyFog)
+        .background(active ? .clear : .white)
+        .overlay(Rectangle().stroke(.white, lineWidth: 1.4))
+    }
+}
+
+// MARK: - Shared pieces
+
+private struct PhoneField: View {
+    @Binding var text: String
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if text.isEmpty {
+                Text("accountability contact")
+                    .font(.redactionItalic(size: 20))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .padding(.horizontal, 14)
+                    .allowsHitTesting(false)
+            }
+            TextField("", text: $text)
+                .font(.redactionItalic(size: 20))
+                .foregroundStyle(.white)
+                .tint(.white)
+                .keyboardType(.phonePad)
+                .textContentType(.telephoneNumber)
+                .padding(.horizontal, 14)
+        }
+        .frame(height: 58)
+        .overlay(Rectangle().stroke(.white, lineWidth: 1.8))
+    }
+}
+
+private struct ZenlyStartButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(configuration.isPressed ? Color.zenlyFog : .white)
+            .background(configuration.isPressed ? .white : .white.opacity(0.02))
+            .overlay(Rectangle().stroke(.white, lineWidth: 5))
+            .contentShape(Rectangle())
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
+private struct ZenlyOutlineButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(configuration.isPressed ? Color.zenlyFog : .white)
+            .background(configuration.isPressed ? .white : .white.opacity(0.02))
+            .overlay(Rectangle().stroke(.white, lineWidth: 2.5))
+            .contentShape(Rectangle())
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Redaction type + palette
+
+private enum RedactionWeight { case regular, bold }
+
+private extension Font {
+    static func redaction(size: CGFloat, weight: RedactionWeight = .regular) -> Font {
+        switch weight {
+        case .regular: return .custom("Redaction10-Regular", size: size)
+        case .bold:    return .custom("Redaction10-Bold", size: size)
+        }
+    }
+
+    static func redactionItalic(size: CGFloat) -> Font {
+        .custom("Redaction10-Italic", size: size)
+    }
+}
+
+private extension Color {
+    static let zenlyFog = Color(red: 0.40, green: 0.40, blue: 0.39)
+}
+
+private extension InterventionLevel {
+    /// Longer description shown under the picker in settings.
+    var detail: String {
+        switch self {
+        case .nudge:
+            return "gentle pressure. we remind you before you drift."
+        case .block:
+            return "hard edges. the session is protected once it begins."
+        case .snitch:
+            return "accountability with teeth. wander off and someone hears about it."
+        }
+    }
+}
+
+// MARK: - Previews
+
+#Preview("Home") {
     ContentView().environment(SessionStore())
 }
 
 #Preview("Settings") {
-    SettingsView().environment(SessionStore())
-}
-
-#Preview("Active – timed") {
     let store = SessionStore()
-    store.start(task: "History essay", durationMinutes: 45)
+    store.contactPhone = "7034732803"
     return ContentView().environment(store)
 }
 
-#Preview("Active – indefinite") {
+#Preview("Running – timed") {
     let store = SessionStore()
-    store.start(task: "Deep work")
+    store.contactPhone = "7034732803"
+    store.interventionLevel = .snitch
+    store.start(task: "finish the history essay", durationMinutes: 45)
+    return ContentView().environment(store)
+}
+
+#Preview("Running – indefinite") {
+    let store = SessionStore()
+    store.contactPhone = "7034732803"
+    store.start(task: "deep work")
     return ContentView().environment(store)
 }
