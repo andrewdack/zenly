@@ -34,7 +34,7 @@ api/                     # canonical Node.js + Express + TypeScript server
 | 1 | Xcode scaffold: 4 targets, entitlements, App Group, URL scheme | ✅ done, builds clean |
 | 2 | Node backend scaffold: Express + provider-agnostic LLM + routes + iMessage watcher | ✅ done, smoke-tested |
 | 3 | iMessage agent conversation loop (stateful, `<session>` parsing, iMessage reply) | ✅ done — `api/src/agent/handler.ts`; local watcher + Photon/Spectrum both wired |
-| 4 | SwiftUI: settings screen (intervention level + contact), waiting screen, active-session timer | ◐ basic active screen exists; settings UI + timer TODO |
+| 4 | SwiftUI: settings screen (intervention level + contact), waiting screen, active-session timer | ✅ done — `Zenly/ContentView.swift`; settings sheet on first launch, waiting screen, live `TimerRing`. Verified in sim. |
 | 5 | ReplayKit broadcast: frame → JPEG → App Group container | ☐ todo |
 | 6 | App polling loop: read frames → POST /judge → nudge/escalate | ☐ todo |
 | 7 | DeviceActivityMonitor: read shield instruction → ManagedSettingsStore | ☐ todo (PAID — Family Controls) |
@@ -49,7 +49,20 @@ api/                     # canonical Node.js + Express + TypeScript server
   The constant lives in `Zenly/SessionStore.swift` (`AppGroup.identifier`).
 - **User settings** live in `SessionStore`: `interventionLevel` (nudge/block/snitch enum) and
   `contactPhone` (string). Configured in the app on first launch; passed to `/snitch` by the app
-  — the iMessage agent never collects the contact phone.
+  — the iMessage agent never collects the contact phone. **Persisted** to the App Group
+  `UserDefaults` via `didSet` (loaded in `init`); `needsSetup` (true while `contactPhone` empty)
+  drives the first-launch settings sheet. `InterventionLevel` carries `label` + `blurb` for the UI.
+- **Phase 4 views** (`Zenly/ContentView.swift`): `SettingsView` (sheet — phone field + segmented
+  level picker, "done" disabled until a contact is set), `WaitingView` ("text the agent" button
+  opens `sms:MAC_IMESSAGE_HANDLE` via `openURL` — placeholder const, disabled while empty; shows a
+  settings summary card), `ActiveSessionView` + `TimerRing` (`TimelineView(.periodic)` — counts
+  down for timed sessions with a progress ring, counts elapsed up for indefinite; ring/label turn
+  orange when off task). A **`#if DEBUG`** tap on the status label toggles `store.onTask` to preview
+  the off-task UI until the Phase 6 judge drives it. UI text is all lowercase (gen-z tone).
+- **Simulator run/verify** (no device needed for Phase 1–4): boot a sim, build for it, install +
+  launch `andrew.Zenly`, then drive the deep link directly (Messages can't send from the sim, and
+  `sms:` doesn't open there): `xcrun simctl openurl <sim> "zenly://session/start?task=...&duration=45"`.
+  Firing the URL from outside the app shows an "Open in Zenly?" confirm; the in-Messages tap skips it.
 - **URL scheme**: `zenly://`. Registered via `Zenly/Info.plist` (`CFBundleURLTypes`) merged with
   the generated Info.plist. Deep link: `zenly://session/start?task=<enc>&duration=<min>`.
   Handled in `ZenlyApp.swift` (`onOpenURL`) → `SessionStore.handle(url:)`.
