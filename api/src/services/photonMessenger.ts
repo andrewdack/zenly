@@ -1,6 +1,7 @@
 import { Spectrum, text } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
 import type { MessageSender, SendMessageInput, SendMessageResult } from "./messageSender.js";
+import { normalizePhoneTarget } from "../util/phone.js";
 
 export interface PhotonMessengerOptions {
   projectId?: string;
@@ -36,7 +37,7 @@ export class PhotonMessenger implements MessageSender {
 
     // Spectrum hands us a composite space id like "any;-;+15715197392" as the
     // user's "phone". space.create() needs a bare E.164 number, so extract it.
-    const to = toE164(input.to);
+    const to = normalizePhoneTarget(input.to);
 
     // Phone-number based: resolve/create a 1:1 conversation for this one-off message.
     // We intentionally do not accept arrays/group participant lists in the HTTP API.
@@ -51,10 +52,4 @@ export class PhotonMessenger implements MessageSender {
       spaceId: space.id
     };
   }
-}
-
-/** Pull a bare E.164 number out of a raw target (handles Spectrum's "any;-;+1555…" ids). */
-function toE164(raw: string): string {
-  const match = raw.match(/\+\d{7,15}/);
-  return match ? match[0] : raw;
 }
