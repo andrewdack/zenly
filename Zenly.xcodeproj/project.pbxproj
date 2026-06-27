@@ -74,13 +74,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		2842C6A02FEF2A7D00AE86C6 /* Exceptions for "Zenly" folder in "Zenly" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 2842C6172FEF2A7D00AE86C6 /* Zenly */;
-		};
 		2842C6602FEF2BD100AE86C6 /* Exceptions for "ZenlyBroadcast" folder in "ZenlyBroadcast" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -101,6 +94,13 @@
 				Info.plist,
 			);
 			target = 2842C66C2FEF2BF000AE86C6 /* ZenlyActivity */;
+		};
+		2842C6A02FEF2A7D00AE86C6 /* Exceptions for "Zenly" folder in "Zenly" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2842C6172FEF2A7D00AE86C6 /* Zenly */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
