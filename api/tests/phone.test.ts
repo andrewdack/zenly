@@ -13,4 +13,12 @@ describe("normalizePhoneTarget", () => {
   it("normalizes composite-ish ids even if the plus is missing", () => {
     expect(normalizePhoneTarget("any;-;5715996273")).toBe("+15715996273");
   });
+
+  it("prefers Andrew's phone over the user-facing Zenly agent number", () => {
+    expect(normalizePhoneTarget("any;-;+14156035536;-;+15715197392")).toBe("+15715197392");
+  });
+
+  it("prefers the witness phone over the snitch sender number", () => {
+    expect(normalizePhoneTarget("any;-;+14156055823;-;+15715996273")).toBe("+15715996273");
+  });
 });

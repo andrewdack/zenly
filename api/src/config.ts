@@ -11,6 +11,8 @@ export interface ApiConfig {
   messageProvider: MessageProvider;
   photonProjectId?: string;
   photonProjectSecret?: string;
+  agentPhone: string;
+  snitchAgentPhone: string;
   deeplinkScheme: string;
 }
 
@@ -33,6 +35,8 @@ export function getConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     messageProvider: (env.MESSAGE_PROVIDER as MessageProvider) || (hasPhoton ? "photon" : "local"),
     photonProjectId: env.PROJECT_ID || env.PHOTON_PROJECT_ID,
     photonProjectSecret: env.PROJECT_SECRET || env.PHOTON_PROJECT_SECRET,
+    agentPhone: env.AGENT_PHONE || env.IMESSAGE_AGENT_PHONE || env.PHOTON_AGENT_PHONE || "+14156035536",
+    snitchAgentPhone: env.SNITCH_AGENT_PHONE || env.SNITCH_IMESSAGE_AGENT_PHONE || "+14156055823",
     deeplinkScheme: env.DEEPLINK_SCHEME || "zenly",
   };
 }

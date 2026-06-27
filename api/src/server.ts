@@ -30,18 +30,26 @@ if (config.messageProvider === "local" || !config.photonProjectId) {
   }
 }
 
+const fallbackMessageSender = localMessenger ?? {
+  sendMessage: async (i) => {
+    console.warn("[msg] no sender configured — would have sent:", i);
+    return { provider: "none", platform: "none", to: i.to, fromPhone: i.fromPhone };
+  }
+};
+
 const messageSender =
-  config.messageProvider === "photon" && config.photonProjectId
-    ? new PhotonMessenger({ projectId: config.photonProjectId, projectSecret: config.photonProjectSecret })
-    : (localMessenger ?? {
-        sendMessage: async (i) => {
-          console.warn("[msg] no sender configured — would have sent:", i);
-          return { provider: "none", platform: "none", to: i.to };
-        }
-      });
+  config.messageProvider === "photon" && config.photonProjectId && config.photonProjectSecret
+    ? new PhotonMessenger({
+        projectId: config.photonProjectId,
+        projectSecret: config.photonProjectSecret,
+        defaultFromPhone: config.agentPhone,
+      })
+    : fallbackMessageSender;
 
 if (config.messageProvider === "photon" && config.photonProjectId) {
   console.log("  Messenger: cloud (photon)");
+  console.log(`  Primary agent phone: ${config.agentPhone}`);
+  console.log(`  Snitch agent phone:  ${config.snitchAgentPhone}`);
 }
 
 // ── Express app ───────────────────────────────────────────────────────────
@@ -54,6 +62,7 @@ const app = createApp({
     providerName: "openrouter",
   }),
   messageSender,
+  snitchAgentPhone: config.snitchAgentPhone,
   openai,
   agentModel: config.agentModel,
   snitchModel: config.snitchModel,
