@@ -1,5 +1,5 @@
 export type SessionMode = "task" | "guardian";
-export type InterventionLevel = "nudge" | "block" | "snitch";
+export type InterventionLevel = "nudge" | "snitch";
 
 /** What the vision judge decides about a single frame. */
 export type FocusStatus = "on_task" | "off_task" | "destructive" | "ok";

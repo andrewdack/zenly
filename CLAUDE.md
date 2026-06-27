@@ -3,7 +3,7 @@
 Intent-aware distraction blocker with a conversational iMessage agent.
 
 **User flow:**
-1. First launch: user configures intervention level (nudge / block / snitch) and accountability
+1. First launch: user configures intervention level (nudge / snitch) and accountability
    contact in the app. This is a one-time setup.
 2. To start a session: user iMessages the agent (`+14156035536`). The agent collects either a
    **task** (focus session, optional duration) **or** starts **guardian mode** (no task — just
@@ -14,11 +14,11 @@ Intent-aware distraction blocker with a conversational iMessage agent.
    games, gambling — flagged in any mode, even if technically "off task".
 5. **Watchdog (grace window)**: first slip → agent texts a **check-in** ("hey, what's up?"); the user
    can reply to explain or own it. If they keep slipping past the grace window, Zenly **escalates**
-   per the configured level: local notification (nudge) → ManagedSettings shield (block) → funny
-   iMessage to the accountability contact (snitch). Behavior-driven — stopping resets the episode.
+   per the configured level: nudge the user or send a funny iMessage to the accountability contact
+   (snitch). Behavior-driven — stopping resets the episode.
 
 The check-in → escalation logic lives in `api/src/agent/watchdog.ts` (a pure reducer) and is
-driven by `POST /judge`. Nudge/block are applied on-device; snitch is sent by the backend.
+driven by `POST /judge`. Nudge is applied on-device; snitch is sent by the backend.
 
 Hackathon project. macOS, Xcode 26.6, Node 24, iPhone target.
 
@@ -54,7 +54,7 @@ api/                     # canonical Node.js + Express + TypeScript server
   unique — likely change to `com.andrewhu.zenly`. Extensions inherit the prefix.
 - **App Group**: `group.com.andrewh.zenly` — declared in all four targets' `.entitlements`.
   The constant lives in `Zenly/SessionStore.swift` (`AppGroup.identifier`).
-- **User settings** live in `SessionStore`: `interventionLevel` (nudge/block/snitch enum) and
+- **User settings** live in `SessionStore`: `interventionLevel` (nudge/snitch enum) and
   `contactPhone` (string). Configured in the app on first launch; passed to `/snitch` by the app
   — the iMessage agent never collects the contact phone. **Persisted** to the App Group
   `UserDefaults` via `didSet` (loaded in `init`); `needsSetup` (true while `contactPhone` empty)
@@ -186,7 +186,7 @@ npm run dev            # tsx watch src/index.ts   (Spectrum message loop only)
 | POST | `/snitch`           | `{ task, contactPhone, screenContent, userPhone? }` → LLM-generated shame iMessage (manual trigger; `/judge` does this automatically on escalate) |
 
 `action` from `/judge` is one of `none` / `checkin` / `waiting` / `escalate` (with `level`). The
-app applies nudge/block locally from `action`; snitch is sent server-side.
+app applies nudge locally from `action`; snitch is sent server-side.
 
 Inbound messages arrive via the local iMessage watcher, not HTTP.
 
@@ -216,7 +216,7 @@ ReplayKit broadcast ──✅──> latest_frame.jpg in App Group  (ZenlyBroadc
    app starts broadcast ──❌──  no RPSystemBroadcastPickerView yet
    app reads frame + uploads ──❌──  no API client / frame loop yet
 POST /judge ──✅──> watchdog ──✅──> check-in / snitch via Photon ──✅──> user's Messages
-   app applies nudge/block from `action` ──❌──  no on-device handling yet
+   app applies nudge from `action` ──❌──  no on-device handling yet
 ```
 
 Remaining work to close the loop (all app-side; the backend is done & testable via curl):
@@ -232,8 +232,7 @@ Remaining work to close the loop (all app-side; the backend is done & testable v
 4. **Frame loop (Phase 6)** — timer (every ~3–5s while a session is active) reads `latest_frame.jpg`
    from the App Group, multipart-POSTs it to `/judge` with `userPhone`, decodes `{ verdict, action }`.
 5. **Apply the result on-device** — set `store.onTask` from `verdict.status` (live UI), and on
-   `action.type == "escalate"`: `nudge` → local `UNUserNotification` (request permission first);
-   `block` → ManagedSettings shield (Phase 7, **PAID**); `snitch` → already sent by backend.
+   `action.type == "escalate"`: `nudge` updates local UI/state; `snitch` is already sent by backend.
 6. **Infra** — phone must reach the `api/` base URL (same Wi-Fi as the Mac, or deploy); Photon
    allowlist must include the user's number + the contact; ReplayKit needs a **physical device**
    (the simulator can't broadcast).

@@ -203,6 +203,21 @@ describe("Zenly API", () => {
     expect(messageSender.sendMessage).not.toHaveBeenCalled();
   });
 
+  it("normalizes the removed block intervention to nudge", async () => {
+    const { app } = makeApp();
+
+    const response = await request(app)
+      .post("/session/start")
+      .send({
+        userPhone: "+15550002003",
+        task: "write tests",
+        interventionLevel: "block"
+      })
+      .expect(200);
+
+    expect(response.body.session.interventionLevel).toBe("nudge");
+  });
+
   it("uses session settings to snitch to the accountability contact", async () => {
     const userPhone = "+15550002001";
     const contactPhone = "+15550002002";

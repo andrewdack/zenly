@@ -662,8 +662,6 @@ private extension InterventionLevel {
         switch self {
         case .nudge:
             return "gentle pressure. we remind you before you drift."
-        case .block:
-            return "hard edges. the session is protected once it begins."
         case .snitch:
             return "accountability with teeth. wander off and someone hears about it."
         }

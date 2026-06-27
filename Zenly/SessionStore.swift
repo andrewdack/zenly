@@ -18,7 +18,6 @@ enum AppGroup {
 
 enum InterventionLevel: String, CaseIterable, Identifiable {
     case nudge  = "Nudge"
-    case block  = "Block"
     case snitch = "Snitch"
     var id: String { rawValue }
 
@@ -27,7 +26,6 @@ enum InterventionLevel: String, CaseIterable, Identifiable {
     var blurb: String {
         switch self {
         case .nudge:  return "a gentle notification when you drift off task"
-        case .block:  return "shields the distracting app so you can't open it"
         case .snitch: return "texts your accountability buddy when you slip 💀"
         }
     }
@@ -251,8 +249,6 @@ final class SessionStore {
         switch response.action.level?.lowercased() {
         case "nudge":
             nudgeCount += 1
-        case "block":
-            judgeStatusText = "block requested — shield deferred"
         case "snitch":
             snitchCount += 1
             judgeStatusText = "snitch sent server-side"
