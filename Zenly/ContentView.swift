@@ -59,12 +59,20 @@ private struct ZenlyShell<Content: View>: View {
     }
 
     var body: some View {
-        content
-            .foregroundStyle(.white)
-            .padding(.horizontal, 32)
-            .padding(.vertical, 42)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(alignment: .center) {
+        GeometryReader { geo in
+            ScrollView {
+                content
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 42)
+                    // Fill the viewport when content is short (keeps the centered
+                    // layout), but grow + scroll when it's taller than the screen.
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(alignment: .center) {
                 ZStack {
                     Color.black
 
