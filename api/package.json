@@ -13,6 +13,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@photon-ai/imessage-kit": "^3.0.0",
+    "better-sqlite3": "^12.11.1",
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
@@ -22,6 +24,7 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "latest",
     "@types/express": "latest",
     "@types/multer": "latest",
