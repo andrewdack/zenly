@@ -180,10 +180,17 @@ private struct SettingsScreen: View {
                 .opacity(0.82)
                 .padding(.top, 18)
 
+            Text("your name")
+                .font(.redactionItalic(size: 18))
+                .opacity(0.7)
+                .padding(.top, 30)
+            NameField(text: $store.userName)
+                .padding(.top, 10)
+
             Text("witness")
                 .font(.redactionItalic(size: 18))
                 .opacity(0.7)
-                .padding(.top, 40)
+                .padding(.top, 26)
             PhoneField(text: $store.contactPhone)
                 .padding(.top, 10)
             Text("who we text when you wander off. stays on your phone.")
@@ -415,6 +422,31 @@ private struct PhoneField: View {
                 .tint(.white)
                 .keyboardType(.phonePad)
                 .textContentType(.telephoneNumber)
+                .padding(.horizontal, 14)
+        }
+        .frame(height: 58)
+        .overlay(Rectangle().stroke(.white, lineWidth: 1.8))
+    }
+}
+
+private struct NameField: View {
+    @Binding var text: String
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if text.isEmpty {
+                Text("what should we call you?")
+                    .font(.redactionItalic(size: 20))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .padding(.horizontal, 14)
+                    .allowsHitTesting(false)
+            }
+            TextField("", text: $text)
+                .font(.redactionItalic(size: 20))
+                .foregroundStyle(.white)
+                .tint(.white)
+                .textContentType(.givenName)
+                .autocorrectionDisabled()
                 .padding(.horizontal, 14)
         }
         .frame(height: 58)

@@ -55,11 +55,19 @@ final class SessionStore {
     var snitchCount: Int = 0
 
     // Persistent user settings (configured in the app before texting the agent).
+    var userName: String {
+        didSet { defaults?.set(userName, forKey: Keys.userName) }
+    }
     var interventionLevel: InterventionLevel {
         didSet { defaults?.set(interventionLevel.rawValue, forKey: Keys.interventionLevel) }
     }
     var contactPhone: String {
         didSet { defaults?.set(contactPhone, forKey: Keys.contactPhone) }
+    }
+
+    /// The user's own number, learned from the agent's deep link. Identifies us to `/judge`.
+    var userPhone: String {
+        didSet { defaults?.set(userPhone, forKey: Keys.userPhone) }
     }
 
     /// True until the user finishes first-launch setup.
@@ -68,15 +76,19 @@ final class SessionStore {
     private var defaults: UserDefaults? { AppGroup.container }
 
     private enum Keys {
+        static let userName = "userName"
         static let interventionLevel = "interventionLevel"
         static let contactPhone = "contactPhone"
+        static let userPhone = "userPhone"
     }
 
     init() {
         let d = AppGroup.container
         let stored = d?.string(forKey: Keys.interventionLevel)
+        userName = d?.string(forKey: Keys.userName) ?? ""
         interventionLevel = stored.flatMap(InterventionLevel.init(rawValue:)) ?? .nudge
         contactPhone = d?.string(forKey: Keys.contactPhone) ?? ""
+        userPhone = d?.string(forKey: Keys.userPhone) ?? ""
     }
 
     @discardableResult
@@ -92,6 +104,10 @@ final class SessionStore {
         let task = items.first(where: { $0.name == "task" })?.value
             ?? (isGuardian ? "" : "Focus session")
         let duration = items.first(where: { $0.name == "duration" })?.value.flatMap { Int($0) }
+        // The agent embeds our own number so we can identify ourselves to /judge.
+        if let phone = items.first(where: { $0.name == "phone" })?.value, !phone.isEmpty {
+            userPhone = phone
+        }
 
         start(mode: isGuardian ? .guardian : .task, task: task, durationMinutes: duration)
         return true
