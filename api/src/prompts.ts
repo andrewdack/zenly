@@ -34,12 +34,26 @@ export function snitchPrompt(task: string, screenContent: string): string {
 
 // ── Vision focus judge ───────────────────────────────────────────────────────
 
-const DESTRUCTIVE_RUBRIC = `"destructive" means clearly self-sabotaging screen time, regardless of any task:
-  - doomscrolling social feeds (tiktok, instagram reels, twitter/x, reddit, youtube shorts)
-  - addictive / time-sink video games
-  - gambling or sports betting (casino apps, betting sites, slots)
-  - anything endless-scroll designed to hijack attention
-work tools, docs, code editors, email, reading articles, watching a lecture, or no person/screen visible are NOT destructive.`;
+const DESTRUCTIVE_RUBRIC = `"destructive" means the user is ACTIVELY ENGAGED in self-sabotaging behavior RIGHT NOW — not just a logo, icon, notification banner, or passing mention of an app.
+
+what counts as destructive (only if actively scrolling/playing/betting):
+  - TikTok: actively swiping through the For You feed of short videos
+  - Instagram Reels: actively watching the Reels tab feed (NOT a profile, post grid, or DMs)
+  - YouTube Shorts: actively swiping through the Shorts feed (NOT a regular video, search, or subscriptions page)
+  - Twitter/X or Reddit: actively scrolling a feed or timeline (NOT reading a single article or thread)
+  - addictive / time-sink video games: actively playing (NOT a home screen, game menu, or app store page)
+  - gambling or sports betting: actively using a casino app, betting site, or slots
+  - any other endless-scroll feed explicitly designed to hijack attention
+
+NOT destructive (even if the app is visible):
+  - a home screen, lock screen, settings page, or notification center
+  - the app icon or splash screen of any social app
+  - a DM conversation, comments section, or single post — not a feed scroll
+  - YouTube regular videos, search results, subscriptions feed, or a creator's channel page
+  - Instagram profile, story viewer, post grid, or explore page (only Reels feed counts)
+  - Twitter/X reading a single tweet, thread, or article link
+  - work tools, docs, code editors, terminals, email, reading articles, watching a lecture
+  - anything where the person is clearly consuming intentional content vs. mindless scrolling`;
 
 /** System prompt for the vision judge, specialized by session mode. */
 export function focusJudgeSystem(mode: SessionMode, task: string | null): string {
@@ -49,8 +63,8 @@ export function focusJudgeSystem(mode: SessionMode, task: string | null): string
 ${DESTRUCTIVE_RUBRIC}
 
 classify the single frame and return ONLY json:
-{"status": "ok" | "destructive", "destructiveCategory": "social" | "games" | "gambling" | "other" | null, "confidence": 0..1, "reason": "short string"}
-use "ok" for anything that isn't clearly destructive. be conservative — only say "destructive" when you're fairly sure.`;
+{"status": "ok" | "destructive", "destructiveCategory": "tiktok" | "instagram_reels" | "youtube_shorts" | "social_feed" | "games" | "gambling" | "other" | null, "confidence": 0..1, "reason": "short string"}
+use "ok" for anything that isn't clearly active destructive scrolling/playing/betting. if you can see a social app but the user is NOT actively in a scroll feed, that is "ok". only mark "destructive" when you can clearly see active feed consumption happening.`;
   }
 
   return `you are zenly's screen watchdog. the user is supposed to be working on: "${task ?? ""}".
@@ -60,11 +74,11 @@ decide if the screen matches that task. also flag self-destructive behavior even
 ${DESTRUCTIVE_RUBRIC}
 
 classify the single frame and return ONLY json:
-{"status": "on_task" | "off_task" | "destructive", "destructiveCategory": "social" | "games" | "gambling" | "other" | null, "confidence": 0..1, "reason": "short string"}
+{"status": "on_task" | "off_task" | "destructive", "destructiveCategory": "tiktok" | "instagram_reels" | "youtube_shorts" | "social_feed" | "games" | "gambling" | "other" | null, "confidence": 0..1, "reason": "short string"}
   - "on_task": screen clearly relates to the task (or they're heads-down working).
-  - "destructive": matches the destructive rubric above (takes priority over off_task).
-  - "off_task": not the task, but not destructive either (e.g. a different work app).
-be conservative when uncertain — prefer "on_task".`;
+  - "destructive": user is ACTIVELY engaged in the destructive behavior described above (takes priority over off_task). a social app being visible but not in feed-scroll mode is NOT destructive.
+  - "off_task": not the task, not destructive either (e.g. a different work app, settings, messages).
+when uncertain, prefer "on_task". only escalate to "destructive" when active feed consumption is unambiguous.`;
 }
 
 // ── Check-in message ─────────────────────────────────────────────────────────
