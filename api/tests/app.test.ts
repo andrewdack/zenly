@@ -4,7 +4,7 @@ import { createApp } from "../src/app.js";
 import type { MessageSender } from "../src/services/messageSender.js";
 import type { VisionProvider } from "../src/services/visionProvider.js";
 
-function makeApp() {
+function makeApp(options: { messageSender?: MessageSender } = {}) {
   const focusProvider: VisionProvider = {
     isFocused: vi.fn(async () => ({
       isFocused: true,
@@ -15,7 +15,7 @@ function makeApp() {
     }))
   };
 
-  const messageSender: MessageSender = {
+  const messageSender: MessageSender = options.messageSender ?? {
     sendMessage: vi.fn(async ({ to }) => ({
       provider: "photon" as const,
       platform: "imessage" as const,
@@ -39,6 +39,20 @@ describe("Zenly API", () => {
     const { app } = makeApp();
 
     await request(app).get("/health").expect(200, { ok: true });
+  });
+
+  it("serves Swagger docs and the OpenAPI document", async () => {
+    const { app } = makeApp();
+
+    const docsResponse = await request(app).get("/docs").expect(200);
+    expect(docsResponse.headers["content-type"]).toContain("text/html");
+    expect(docsResponse.text).toContain("SwaggerUIBundle");
+    expect(docsResponse.text).toContain("/openapi.json");
+
+    const specResponse = await request(app).get("/openapi.json").expect(200);
+    expect(specResponse.body.openapi).toBe("3.0.3");
+    expect(specResponse.body.paths).toHaveProperty("/isFocused");
+    expect(specResponse.body.paths).toHaveProperty("/sendMessage");
   });
 
   it("classifies focus from an uploaded image", async () => {
@@ -110,6 +124,26 @@ describe("Zenly API", () => {
       to: "+15555555555",
       message: "Time to lock in."
     });
+  });
+
+  it("returns a clear error when Photon rejects a non-allowlisted recipient", async () => {
+    const messageSender: MessageSender = {
+      sendMessage: vi.fn(async () => {
+        throw new Error("[spectrum-imessage] Target not allowed for this project");
+      })
+    };
+    const { app } = makeApp({ messageSender });
+
+    const response = await request(app)
+      .post("/sendMessage")
+      .send({
+        to: "+15555555555",
+        message: "Time to lock in."
+      })
+      .expect(403);
+
+    expect(response.body.error.code).toBe("photon_target_not_allowed");
+    expect(response.body.error.message).toContain("Photon Dashboard > Users");
   });
 
   it("rejects invalid phone numbers", async () => {
