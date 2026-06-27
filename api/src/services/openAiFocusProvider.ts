@@ -72,7 +72,9 @@ export class OpenAiFocusProvider implements VisionProvider {
               type: "image_url",
               image_url: {
                 url: imageUrl,
-                detail: "low"
+                // "high" preserves the small UI/text cues the judge needs to
+                // tell a Reels feed from a profile, a Short from a video, etc.
+                detail: "high"
               }
             }
           ]

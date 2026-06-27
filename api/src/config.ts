@@ -26,7 +26,7 @@ export function getConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     port: readNumber(env.PORT, 3001),
     openRouterApiKey: env.OPENROUTER_API_KEY,
     openRouterBaseUrl: env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
-    focusModel: env.FOCUS_MODEL || "google/gemma-3-12b-it",
+    focusModel: env.FOCUS_MODEL || "anthropic/claude-haiku-4-5",
     agentModel: env.AGENT_MODEL || "anthropic/claude-sonnet-4-6",
     snitchModel: env.SNITCH_MODEL || "anthropic/claude-haiku-4-5",
     maxImageBytes: readNumber(env.MAX_IMAGE_BYTES, 5_000_000),
