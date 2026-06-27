@@ -34,17 +34,27 @@ export class PhotonMessenger implements MessageSender {
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
     const imessageApi = await this.getImessageApi();
 
+    // Spectrum hands us a composite space id like "any;-;+15715197392" as the
+    // user's "phone". space.create() needs a bare E.164 number, so extract it.
+    const to = toE164(input.to);
+
     // Phone-number based: resolve/create a 1:1 conversation for this one-off message.
     // We intentionally do not accept arrays/group participant lists in the HTTP API.
-    const space = await imessageApi.space.create(input.to);
+    const space = await imessageApi.space.create(to);
     const sent = await space.send(text(input.message));
 
     return {
       provider: "photon",
       platform: "imessage",
-      to: input.to,
+      to,
       messageId: sent?.id,
       spaceId: space.id
     };
   }
+}
+
+/** Pull a bare E.164 number out of a raw target (handles Spectrum's "any;-;+1555…" ids). */
+function toE164(raw: string): string {
+  const match = raw.match(/\+\d{7,15}/);
+  return match ? match[0] : raw;
 }
