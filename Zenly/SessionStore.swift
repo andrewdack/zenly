@@ -11,6 +11,16 @@ enum InterventionLevel: String, CaseIterable, Identifiable {
     case block  = "Block"
     case snitch = "Snitch"
     var id: String { rawValue }
+
+    var label: String { rawValue.lowercased() }
+
+    var blurb: String {
+        switch self {
+        case .nudge:  return "a gentle notification when you drift off task"
+        case .block:  return "shields the distracting app so you can't open it"
+        case .snitch: return "texts your accountability buddy when you slip 💀"
+        }
+    }
 }
 
 struct FocusSession: Equatable {
@@ -37,8 +47,29 @@ final class SessionStore {
     var snitchCount: Int = 0
 
     // Persistent user settings (configured in the app before texting the agent).
-    var interventionLevel: InterventionLevel = .nudge
-    var contactPhone: String = ""
+    var interventionLevel: InterventionLevel {
+        didSet { defaults?.set(interventionLevel.rawValue, forKey: Keys.interventionLevel) }
+    }
+    var contactPhone: String {
+        didSet { defaults?.set(contactPhone, forKey: Keys.contactPhone) }
+    }
+
+    /// True until the user finishes first-launch setup.
+    var needsSetup: Bool { contactPhone.isEmpty }
+
+    private var defaults: UserDefaults? { AppGroup.container }
+
+    private enum Keys {
+        static let interventionLevel = "interventionLevel"
+        static let contactPhone = "contactPhone"
+    }
+
+    init() {
+        let d = AppGroup.container
+        let stored = d?.string(forKey: Keys.interventionLevel)
+        interventionLevel = stored.flatMap(InterventionLevel.init(rawValue:)) ?? .nudge
+        contactPhone = d?.string(forKey: Keys.contactPhone) ?? ""
+    }
 
     @discardableResult
     func handle(url: URL) -> Bool {
