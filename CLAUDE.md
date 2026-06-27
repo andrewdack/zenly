@@ -23,7 +23,8 @@ ZenlyBroadcast/          # ReplayKit RPBroadcastSampleHandler (screen capture)  
 ZenlyBroadcastSetupUI/   # ReplayKit setup UI extension                         [App Groups]
 ZenlyActivity/           # DeviceActivityMonitor extension (shield)             [Family Controls — PAID ONLY]
 ZenlyTests/ ZenlyUITests/
-backend/                 # Node.js + Express + TypeScript: iMessage agent, vision judge, snitch
+backend/                 # legacy reference only — do not use
+api/                     # canonical Node.js + Express + TypeScript server
 ```
 
 ## Build order & status
@@ -32,7 +33,7 @@ backend/                 # Node.js + Express + TypeScript: iMessage agent, visio
 |------|------|--------|
 | 1 | Xcode scaffold: 4 targets, entitlements, App Group, URL scheme | ✅ done, builds clean |
 | 2 | Node backend scaffold: Express + provider-agnostic LLM + routes + iMessage watcher | ✅ done, smoke-tested |
-| 3 | iMessage agent conversation loop (stateful, `<session>` parsing, iMessage reply) | ◐ built in `backend/src/agent/handler.ts`; activates when an LLM key is set |
+| 3 | iMessage agent conversation loop (stateful, `<session>` parsing, iMessage reply) | ✅ done — `api/src/agent/handler.ts`; local watcher + Photon/Spectrum both wired |
 | 4 | SwiftUI: settings screen (intervention level + contact), waiting screen, active-session timer | ◐ basic active screen exists; settings UI + timer TODO |
 | 5 | ReplayKit broadcast: frame → JPEG → App Group container | ☐ todo |
 | 6 | App polling loop: read frames → POST /judge → nudge/escalate | ☐ todo |
@@ -103,19 +104,22 @@ covers both vision (focus judge) and agent chat. Model is configurable per role.
 - `local` — `@photon-ai/imessage-kit`, reads `~/Library/Messages/chat.db` + sends via AppleScript.
   Requires macOS + Full Disk Access. Auto-selected when Photon creds are absent.
 
-**Receiving** (iMessage watcher): always local `imessage-kit` — the backend runs on a Mac anyway.
-Watcher failure (no Full Disk Access) is non-fatal; server boots without it.
+**Receiving** (iMessage watcher):
+- **Photon primary**: `src/index.ts` uses `spectrum-ts` async message loop — run this when Photon creds are set.
+- **Local fallback**: `src/server.ts` uses `imessage-kit` `sdk.startWatching()` — auto-selected when no Photon creds. Requires Full Disk Access. Watcher failure is non-fatal; Express still boots.
 
 **Image format**: multipart JPEG (`POST /isFocused`, field name `image`). ReplayKit frames are
 converted `CMSampleBuffer → CVPixelBuffer → UIImage → JPEG Data` before upload.
 
 ```
-api/src/server.ts                       # entry: builds providers, starts Express + watcher
-api/src/app.ts                          # createApp() — all routes, error handler
+api/src/index.ts                        # Photon entry: Spectrum message loop → agent
+api/src/server.ts                       # Local entry: Express + imessage-kit watcher + agent
+api/src/app.ts                          # createApp() — all routes, error handler, OpenAPI docs
+api/src/openapi.ts                      # OpenAPI spec + Swagger UI
 api/src/config.ts                       # env vars + getConfig()
 api/src/types.ts                        # shared TS interfaces (Session, ChatMessage, etc.)
-api/src/prompts.ts                      # agent + snitch system prompts
-api/src/agent/handler.ts               # createAgentHandler() — iMessage conversation loop
+api/src/prompts.ts                      # agent + snitch system prompts (gen-z tone)
+api/src/agent/handler.ts               # createAgentHandler() — stateful conversation loop
 api/src/store/sessions.ts              # in-memory session state per phone number
 api/src/util/deeplink.ts               # startLink() — %20 encoding (NOT "+")
 api/src/services/visionProvider.ts     # VisionProvider interface
@@ -132,8 +136,12 @@ api/src/http.ts                        # asyncHandler + HttpError helpers
 cd api
 npm install
 cp .env.example .env   # add OPENROUTER_API_KEY; optionally add Photon creds
-# For local messaging: grant Full Disk Access to Terminal → System Preferences → Privacy & Security
-npm run dev            # tsx watch src/server.ts  (port 3001)
+
+# Local mode (imessage-kit — grant Full Disk Access to Terminal first):
+npm run dev:api        # tsx watch src/server.ts  (port 3001 + iMessage watcher)
+
+# Photon mode (PROJECT_ID + PROJECT_SECRET required):
+npm run dev            # tsx watch src/index.ts   (Spectrum message loop only)
 ```
 
 ### Routes
