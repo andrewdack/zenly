@@ -6,7 +6,7 @@ export class ImessageKitMessenger implements MessageSender {
   readonly sdk: IMessageSDK;
 
   constructor() {
-    this.sdk = new IMessageSDK();
+    this.sdk = new IMessageSDK({ debug: true });
   }
 
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
