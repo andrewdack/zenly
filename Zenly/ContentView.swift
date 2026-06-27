@@ -15,6 +15,7 @@ struct ContentView: View {
     @Environment(SessionStore.self) private var store
     @State private var showingSettings = false
     @State private var showingProfile = false
+    @State private var showingStopBroadcastAlert = false
 
     var body: some View {
         ZenlyShell {
@@ -23,7 +24,10 @@ struct ContentView: View {
             } else if showingSettings {
                 SettingsScreen(onDone: { showingSettings = false })
             } else if let session = store.session {
-                RunningSessionView(session: session)
+                RunningSessionView(session: session) {
+                    store.end()
+                    showingStopBroadcastAlert = true
+                }
             } else {
                 HomeScreen(
                     onEditSettings: { showingSettings = true },
@@ -37,6 +41,11 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.22), value: store.session != nil)
         .animation(.easeInOut(duration: 0.22), value: showingSettings)
         .animation(.easeInOut(duration: 0.22), value: showingProfile)
+        .alert("stop screen capture", isPresented: $showingStopBroadcastAlert) {
+            Button("got it", role: .cancel) {}
+        } message: {
+            Text("zenly stopped uploading. end the red screen-recording broadcast from the system ui too.")
+        }
     }
 }
 
@@ -105,12 +114,16 @@ private struct HomeScreen: View {
                 .lineSpacing(3)
                 .opacity(0.82)
                 .padding(.top, 22)
-                .frame(maxWidth: 320, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
 
             Button(action: textTheAgent) {
                 Text("text the agent")
                     .font(.redaction(size: 40, weight: .bold))
-                    .frame(maxWidth: .infinity, minHeight: 132)
+                    .minimumScaleFactor(0.72)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 34)
             }
             .buttonStyle(ZenlyStartButtonStyle())
             .disabled(MAC_IMESSAGE_HANDLE.isEmpty)
@@ -178,13 +191,17 @@ private struct SummaryRow: View {
     let value: String
 
     var body: some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(key)
                 .font(.redactionItalic(size: 18))
                 .opacity(0.72)
-            Spacer()
+                .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 8)
             Text(value)
                 .font(.redaction(size: 20, weight: .bold))
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
         }
     }
 }
@@ -248,14 +265,16 @@ private struct SettingsScreen: View {
                 .lineSpacing(2)
                 .opacity(0.8)
                 .padding(.top, 14)
-                .frame(maxWidth: 320, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
 
             Spacer()
 
             Button(action: onDone) {
                 Text("done")
                     .font(.redaction(size: 30, weight: .bold))
-                    .frame(maxWidth: .infinity, minHeight: 64)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
             }
             .buttonStyle(ZenlyOutlineButtonStyle())
             .disabled(store.contactPhone.isEmpty)
@@ -292,6 +311,7 @@ private struct ModeRow: View {
 
 private struct RunningSessionView: View {
     let session: FocusSession
+    let onEnd: () -> Void
     @Environment(SessionStore.self) private var store
 
     var body: some View {
@@ -320,8 +340,9 @@ private struct RunningSessionView: View {
             Text(session.isGuardian ? "no task — just keeping you off the bad stuff" : session.task)
                 .font(.redaction(size: session.isGuardian ? 24 : 32, weight: .bold))
                 .lineSpacing(5)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(16)
-                .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
                 .overlay(Rectangle().stroke(.white, lineWidth: 2))
                 .padding(.top, 10)
 
@@ -346,7 +367,7 @@ private struct RunningSessionView: View {
 
                 Spacer()
 
-                Button("end") { store.end() }
+                Button("end", action: onEnd)
                     .font(.redactionItalic(size: 24))
                     .foregroundStyle(.white)
                     .buttonStyle(.plain)
@@ -425,7 +446,7 @@ private struct JudgeStatusCard: View {
             if !store.lastJudgeReason.isEmpty {
                 Text(store.lastJudgeReason)
                     .font(.redactionItalic(size: 15))
-                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
                     .opacity(0.72)
             }
         }
@@ -695,7 +716,8 @@ private struct ProfileScreen: View {
             Button(action: onDone) {
                 Text("back")
                     .font(.redaction(size: 30, weight: .bold))
-                    .frame(maxWidth: .infinity, minHeight: 64)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
             }
             .buttonStyle(ZenlyOutlineButtonStyle())
             .padding(.bottom, 12)
@@ -786,7 +808,8 @@ private struct RecentVerdictsCard: View {
                         .frame(width: 8, height: 8)
                     Text(v.reason)
                         .font(.redactionItalic(size: 15))
-                        .lineLimit(1)
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
                         .opacity(0.85)
                 }
             }

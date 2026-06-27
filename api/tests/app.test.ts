@@ -10,8 +10,8 @@ import { closeDb } from "../src/store/db.js";
 afterAll(() => closeDb());
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeApp(options: { messageSender?: MessageSender; openai?: any } = {}) {
-  const focusProvider: VisionProvider = {
+function makeApp(options: { messageSender?: MessageSender; openai?: any; focusProvider?: VisionProvider } = {}) {
+  const focusProvider: VisionProvider = options.focusProvider ?? {
     isFocused: vi.fn(async () => ({
       status: "ok" as const,
       isFocused: true,
@@ -201,6 +201,80 @@ describe("Zenly API", () => {
       .expect(400);
 
     expect(messageSender.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("uses session settings to snitch to the accountability contact", async () => {
+    const userPhone = "+15550002001";
+    const contactPhone = "+15550002002";
+    const focusProvider: VisionProvider = {
+      isFocused: vi.fn(async () => ({
+        status: "off_task" as const,
+        isFocused: false,
+        destructiveCategory: null,
+        confidence: 0.91,
+        reason: "doomscrolling tiktok",
+        provider: "openrouter",
+        model: "test-model"
+      }))
+    };
+    const messageSender: MessageSender = {
+      sendMessage: vi.fn(async ({ to }) => ({
+        provider: "photon" as const,
+        platform: "imessage" as const,
+        to,
+        messageId: `msg_${to}`,
+        spaceId: `space_${to}`
+      }))
+    };
+    const openai = {
+      chat: {
+        completions: {
+          create: vi.fn(async () => ({
+            choices: [{ message: { content: "caught in 4k. lock in." } }]
+          }))
+        }
+      }
+    };
+    const { app } = makeApp({ focusProvider, messageSender, openai });
+
+    const start = await request(app)
+      .post("/session/start")
+      .send({
+        userPhone,
+        mode: "guardian",
+        interventionLevel: "snitch",
+        contactPhone
+      })
+      .expect(200);
+    expect(start.body.session).toMatchObject({ interventionLevel: "snitch", contactPhone });
+
+    await request(app)
+      .post("/judge")
+      .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
+      .field("userPhone", userPhone)
+      .field("graceMs", "-1")
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.action).toMatchObject({ type: "checkin" });
+      });
+
+    const escalation = await request(app)
+      .post("/judge")
+      .attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" })
+      .field("userPhone", userPhone)
+      .field("graceMs", "-1")
+      .expect(200);
+
+    expect(escalation.body.action).toMatchObject({ type: "escalate", level: "snitch" });
+    expect(escalation.body.escalation).toMatchObject({
+      sent: true,
+      to: contactPhone,
+      message: "caught in 4k. lock in."
+    });
+    expect(messageSender.sendMessage).toHaveBeenLastCalledWith({
+      to: contactPhone,
+      message: "caught in 4k. lock in."
+    });
   });
 });
 

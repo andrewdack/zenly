@@ -19,6 +19,10 @@ struct JudgeAction: Decodable {
     let reason: String?
 }
 
+struct StartSessionResponse: Decodable {
+    let deeplink: String
+}
+
 struct EndSessionResponse: Decodable {
     let ended: Bool
     let memoriesAdded: Int
@@ -68,6 +72,42 @@ enum ZenlyAPIError: LocalizedError {
 struct ZenlyAPIClient {
     var baseURL: URL = API_BASE_URL
 
+    @discardableResult
+    func startSession(
+        userPhone: String,
+        mode: FocusMode,
+        task: String,
+        durationMinutes: Int?,
+        interventionLevel: InterventionLevel,
+        contactPhone: String,
+        name: String
+    ) async throws -> StartSessionResponse {
+        let trimmedContact = contactPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = StartSessionRequest(
+            userPhone: userPhone,
+            mode: mode.rawValue,
+            task: mode == .guardian ? nil : task,
+            durationMinutes: mode == .guardian ? nil : durationMinutes,
+            interventionLevel: interventionLevel.label,
+            contactPhone: trimmedContact.isEmpty ? nil : trimmedContact,
+            name: trimmedName.isEmpty ? nil : trimmedName
+        )
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("session/start"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ZenlyAPIError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw ZenlyAPIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return try JSONDecoder().decode(StartSessionResponse.self, from: data)
+    }
+
     func judgeFrame(imageData: Data, userPhone: String) async throws -> JudgeResponse {
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = URLRequest(url: baseURL.appendingPathComponent("judge"))
@@ -114,6 +154,16 @@ struct ZenlyAPIClient {
             throw ZenlyAPIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
         return try JSONDecoder().decode(ProfileResponse.self, from: data)
+    }
+
+    private struct StartSessionRequest: Encodable {
+        let userPhone: String
+        let mode: String
+        let task: String?
+        let durationMinutes: Int?
+        let interventionLevel: String
+        let contactPhone: String?
+        let name: String?
     }
 
     private func multipartBody(boundary: String, imageData: Data, userPhone: String) -> Data {
