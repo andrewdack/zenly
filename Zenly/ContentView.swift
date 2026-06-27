@@ -156,6 +156,9 @@ struct ActiveSessionView: View {
                   systemImage: store.onTask ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundStyle(store.onTask ? .green : .orange)
                 .font(.headline)
+                #if DEBUG
+                .onTapGesture { store.onTask.toggle() }  // debug: simulate focus judge
+                #endif
 
             Button("end session", role: .destructive) { store.end() }
                 .buttonStyle(.borderedProminent)
