@@ -117,6 +117,18 @@ export function offenseCount(phone: string, category: string | null): number {
   return row.c;
 }
 
+export function verdictsSince(phone: string, since: number, limit = 50) {
+  return getDb()
+    .prepare(`SELECT status, category, reason, mode, created_at FROM verdicts WHERE phone = ? AND created_at >= ? ORDER BY created_at DESC LIMIT ?`)
+    .all(phone, since, limit) as Array<{ status: FocusStatus; category: string | null; reason: string; mode: string; created_at: number }>;
+}
+
+export function eventsSince(phone: string, since: number, limit = 50) {
+  return getDb()
+    .prepare(`SELECT type, detail, created_at FROM events WHERE phone = ? AND created_at >= ? ORDER BY created_at DESC LIMIT ?`)
+    .all(phone, since, limit) as Array<{ type: "checkin" | "nudge" | "snitch"; detail: string; created_at: number }>;
+}
+
 function safeJson(s: string): Record<string, unknown> {
   try { return JSON.parse(s) as Record<string, unknown>; } catch { return {}; }
 }

@@ -19,6 +19,38 @@ struct JudgeAction: Decodable {
     let reason: String?
 }
 
+struct EndSessionResponse: Decodable {
+    let ended: Bool
+    let memoriesAdded: Int
+}
+
+struct MemoryItem: Decodable {
+    let kind: String
+    let fact: String
+}
+
+struct ProfileStats: Decodable {
+    let total: Int
+    let byStatus: [String: Int]
+    let byCategory: [String: Int]
+    let checkIns: Int
+    let snitches: Int
+}
+
+struct RecentVerdict: Decodable {
+    let status: String
+    let category: String?
+    let reason: String
+    let mode: String
+}
+
+struct ProfileResponse: Decodable {
+    let name: String?
+    let memories: [MemoryItem]
+    let stats: ProfileStats
+    let recentVerdicts: [RecentVerdict]
+}
+
 enum ZenlyAPIError: LocalizedError {
     case invalidResponse
     case server(status: Int, body: String)
@@ -54,6 +86,34 @@ struct ZenlyAPIClient {
         }
 
         return try JSONDecoder().decode(JudgeResponse.self, from: data)
+    }
+
+    func endSession(userPhone: String) async throws -> EndSessionResponse {
+        var request = URLRequest(url: baseURL.appendingPathComponent("session/end"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["userPhone": userPhone])
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ZenlyAPIError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw ZenlyAPIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return try JSONDecoder().decode(EndSessionResponse.self, from: data)
+    }
+
+    func fetchProfile(userPhone: String) async throws -> ProfileResponse {
+        // E.164 phones contain '+' which URLComponents won't encode in path — do it manually.
+        let encoded = userPhone.replacingOccurrences(of: "+", with: "%2B")
+        guard let url = URL(string: baseURL.absoluteString + "/profile/" + encoded) else {
+            throw ZenlyAPIError.invalidResponse
+        }
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse else { throw ZenlyAPIError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw ZenlyAPIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return try JSONDecoder().decode(ProfileResponse.self, from: data)
     }
 
     private func multipartBody(boundary: String, imageData: Data, userPhone: String) -> Data {

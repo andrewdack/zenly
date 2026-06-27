@@ -49,4 +49,34 @@ describe("profile store", () => {
     expect(stats.checkIns).toBe(1);
     expect(stats.snitches).toBe(1);
   });
+
+  it("verdictsSince filters by timestamp", () => {
+    const PHONE2 = "+15555550999";
+    const before = Date.now() - 1;
+    profile.logVerdict(PHONE2, "on_task", null, "first", "task");
+    profile.logVerdict(PHONE2, "off_task", null, "second", "task");
+    const after = Date.now() + 1;
+
+    // all verdicts since before both inserts
+    const all = profile.verdictsSince(PHONE2, before);
+    expect(all).toHaveLength(2);
+
+    // nothing in the future
+    const none = profile.verdictsSince(PHONE2, after);
+    expect(none).toHaveLength(0);
+  });
+
+  it("eventsSince filters by timestamp", () => {
+    const PHONE3 = "+15555550998";
+    const before = Date.now() - 1;
+    profile.logEvent(PHONE3, "checkin", "first event");
+    profile.logEvent(PHONE3, "nudge", "second event");
+    const after = Date.now() + 1;
+
+    const all = profile.eventsSince(PHONE3, before);
+    expect(all).toHaveLength(2);
+
+    const none = profile.eventsSince(PHONE3, after);
+    expect(none).toHaveLength(0);
+  });
 });

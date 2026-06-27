@@ -1,3 +1,4 @@
+import type { Memory } from "./store/profile.js";
 import type { Session, SessionMode } from "./types.js";
 
 export const AGENT_SYSTEM = `you are zenly, a chill focus buddy who texts people to help them get stuff done. you talk like a real person — all lowercase, casual, like you're texting a friend.
@@ -64,6 +65,59 @@ classify the single frame and return ONLY json:
   - "destructive": matches the destructive rubric above (takes priority over off_task).
   - "off_task": not the task, but not destructive either (e.g. a different work app).
 be conservative when uncertain — prefer "on_task".`;
+}
+
+// ── Check-in message ─────────────────────────────────────────────────────────
+
+// ── Post-session memory profiler ─────────────────────────────────────────────
+
+export const PROFILER_SYSTEM = `you are zenly's memory distiller. after a focus session ends you extract 2-3 short, specific facts about the user's behavior or preferences — things that will make future check-ins and encouragement more personal and useful.
+
+output ONLY a json array (no markdown, no explanation):
+[{"kind":"behavior","fact":"..."},{"kind":"preference","fact":"..."}]
+
+guidelines:
+- "behavior" = an observable pattern (e.g. "drifts to instagram after about 20 min of focus")
+- "preference" = something they like or dislike about how they work (e.g. "prefers timed sessions with a hard deadline")
+- be specific and grounded in the session data — no generic platitudes
+- if the session was clean, one positive fact is enough (e.g. "stayed focused for the full 45-min essay session without slipping")
+- if the session was short and uneventful, return []
+- never repeat a fact from the existing memories list`;
+
+export function profilerPrompt(
+  session: Session,
+  verdicts: Array<{ status: string; category: string | null; reason: string; mode: string }>,
+  events: Array<{ type: string; detail: string }>,
+  existingMemories: Memory[]
+): string {
+  const mode = session.mode === "guardian"
+    ? "guardian mode (no specific task — watching for destructive behavior)"
+    : `task: "${session.task}"`;
+  const duration = session.durationMinutes != null
+    ? `${session.durationMinutes} min (timed)`
+    : "open-ended (no time limit)";
+
+  const byStatus: Record<string, number> = {};
+  for (const v of verdicts) byStatus[v.status] = (byStatus[v.status] ?? 0) + 1;
+  const statusSummary = Object.entries(byStatus).map(([s, n]) => `${s}: ${n}`).join(", ");
+
+  const badVerdicts = verdicts.filter(v => v.status !== "on_task" && v.status !== "ok");
+  const sampleReasons = badVerdicts.slice(0, 5).map(v =>
+    v.category ? `${v.status} (${v.category}): "${v.reason}"` : `${v.status}: "${v.reason}"`
+  );
+
+  const eventLines = events.map(e => `${e.type}: "${e.detail.slice(0, 80)}"`);
+  const existingFacts = existingMemories.map(m => `- ${m.fact}`);
+
+  const parts = [
+    `session: ${mode} | ${duration}`,
+    `verdicts: ${verdicts.length} total — ${statusSummary || "none"}`,
+  ];
+  if (sampleReasons.length) parts.push(`sample slip reasons:\n${sampleReasons.join("\n")}`);
+  if (eventLines.length) parts.push(`events (check-ins / nudges / snitches):\n${eventLines.join("\n")}`);
+  if (existingFacts.length) parts.push(`existing memories (don't repeat these):\n${existingFacts.join("\n")}`);
+
+  return parts.join("\n\n");
 }
 
 // ── Check-in message ─────────────────────────────────────────────────────────

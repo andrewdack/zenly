@@ -144,6 +144,12 @@ final class SessionStore {
 
     func end() {
         stopJudgeLoop()
+        if !userPhone.isEmpty {
+            let phone = userPhone
+            Task {
+                _ = try? await apiClient.endSession(userPhone: phone)
+            }
+        }
         session = nil
         onTask = true
         judgeStatusText = "screen judge idle"

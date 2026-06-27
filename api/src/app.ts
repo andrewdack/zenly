@@ -6,7 +6,7 @@ import { asyncHandler, HttpError } from "./http.js";
 import { openApiDocument, swaggerHtml } from "./openapi.js";
 import type { MessageSender } from "./services/messageSender.js";
 import type { VisionProvider } from "./services/visionProvider.js";
-import { CHECKIN_SYSTEM, checkInPrompt, SNITCH_SYSTEM, snitchPrompt } from "./prompts.js";
+import { CHECKIN_SYSTEM, checkInPrompt, PROFILER_SYSTEM, profilerPrompt, SNITCH_SYSTEM, snitchPrompt } from "./prompts.js";
 import * as sessions from "./store/sessions.js";
 import * as profile from "./store/profile.js";
 import { startLink } from "./util/deeplink.js";
@@ -172,6 +172,61 @@ export function createApp(options: CreateAppOptions) {
         stats: sessions.get(phone).stats,
         deeplink: startLink(deeplinkScheme, session, phone),
       });
+    })
+  );
+
+  app.post(
+    "/session/end",
+    asyncHandler(async (req, res) => {
+      const userPhone = (req.body?.userPhone as string | undefined)?.trim();
+      if (!userPhone) throw new HttpError(400, "userPhone is required", "missing_fields");
+
+      const session = sessions.getSession(userPhone);
+
+      let memoriesAdded = 0;
+      if (session) {
+        const verdicts = profile.verdictsSince(userPhone, session.startedAt);
+        const events = profile.eventsSince(userPhone, session.startedAt);
+
+        if (verdicts.length > 0) {
+          try {
+            const existingMemories = profile.getMemories(userPhone, 20);
+            const completion = await openai.chat.completions.create({
+              model: snitchModel,
+              max_tokens: 300,
+              messages: [
+                { role: "system", content: PROFILER_SYSTEM },
+                { role: "user", content: profilerPrompt(session, verdicts, events, existingMemories) },
+              ],
+            });
+            const raw = completion.choices[0]?.message?.content?.trim() ?? "[]";
+            const parsed = JSON.parse(raw.replace(/^```json\n?|\n?```$/g, "")) as Array<{ kind: string; fact: string }>;
+            for (const m of parsed) {
+              if ((m.kind === "behavior" || m.kind === "preference") && typeof m.fact === "string") {
+                profile.addMemory(userPhone, m.kind, m.fact);
+                memoriesAdded++;
+              }
+            }
+          } catch (err) {
+            console.error("[session/end] profiler failed:", err);
+          }
+        }
+
+        sessions.endSession(userPhone);
+      }
+
+      res.json({ ended: true, memoriesAdded });
+    })
+  );
+
+  app.get(
+    "/profile/:phone",
+    asyncHandler(async (req, res) => {
+      const phone = String(req.params.phone);
+      const p = profile.getProfile(phone);
+      const stats = profile.behaviorStats(phone);
+      const recentVerdicts = profile.recentVerdicts(phone, 10);
+      res.json({ name: p.name, memories: p.memories, stats, recentVerdicts });
     })
   );
 

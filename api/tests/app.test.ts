@@ -1,10 +1,16 @@
+process.env.ZENLY_DB_PATH = ":memory:";
+
 import request from "supertest";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
 import type { MessageSender } from "../src/services/messageSender.js";
 import type { VisionProvider } from "../src/services/visionProvider.js";
+import { closeDb } from "../src/store/db.js";
 
-function makeApp(options: { messageSender?: MessageSender } = {}) {
+afterAll(() => closeDb());
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeApp(options: { messageSender?: MessageSender; openai?: any } = {}) {
   const focusProvider: VisionProvider = {
     isFocused: vi.fn(async () => ({
       status: "ok" as const,
@@ -30,6 +36,7 @@ function makeApp(options: { messageSender?: MessageSender } = {}) {
   const app = createApp({
     focusProvider,
     messageSender,
+    openai: options.openai,
     maxImageBytes: 1024 * 1024
   });
 
@@ -194,5 +201,105 @@ describe("Zenly API", () => {
       .expect(400);
 
     expect(messageSender.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /session/end", () => {
+  const PHONE = "+15550001001";
+
+  it("returns ended:true with memoriesAdded:0 when there is no active session", async () => {
+    const { app } = makeApp();
+    const res = await request(app)
+      .post("/session/end")
+      .send({ userPhone: PHONE })
+      .expect(200);
+    expect(res.body).toEqual({ ended: true, memoriesAdded: 0 });
+  });
+
+  it("ends a session with no verdicts without calling the LLM", async () => {
+    const openai = { chat: { completions: { create: vi.fn() } } };
+    const { app } = makeApp({ openai });
+
+    await request(app)
+      .post("/session/start")
+      .send({ userPhone: PHONE, task: "write tests" })
+      .expect(200);
+
+    const res = await request(app)
+      .post("/session/end")
+      .send({ userPhone: PHONE })
+      .expect(200);
+
+    expect(res.body).toEqual({ ended: true, memoriesAdded: 0 });
+    expect(openai.chat.completions.create).not.toHaveBeenCalled();
+
+    // session should be gone
+    const session = await request(app).get(`/session/${encodeURIComponent(PHONE)}`).expect(200);
+    expect(session.body.active).toBe(false);
+  });
+
+  it("calls the LLM and stores memories when verdicts exist", async () => {
+    const openai = {
+      chat: {
+        completions: {
+          create: vi.fn(async () => ({
+            choices: [{
+              message: {
+                content: '[{"kind":"behavior","fact":"drifts to games after 15 min"},{"kind":"preference","fact":"prefers timed sessions"}]'
+              }
+            }]
+          }))
+        }
+      }
+    };
+    // use on_task so watchdog never fires a check-in (which would also call the LLM)
+    const focusProvider: VisionProvider = {
+      isFocused: vi.fn(async () => ({
+        status: "on_task" as const,
+        isFocused: true,
+        destructiveCategory: null,
+        confidence: 0.95,
+        reason: "Writing code",
+        provider: "openrouter",
+        model: "test-model"
+      }))
+    };
+    const app = createApp({ focusProvider, messageSender: { sendMessage: vi.fn(async ({ to }) => ({ provider: "photon" as const, platform: "imessage" as const, to, messageId: "x", spaceId: "y" })) }, openai, maxImageBytes: 1024 * 1024 });
+    const PHONE2 = "+15550001002";
+
+    await request(app).post("/session/start").send({ userPhone: PHONE2, task: "study" }).expect(200);
+    await request(app).post("/judge").attach("image", Buffer.from("fake"), { filename: "f.jpg", contentType: "image/jpeg" }).field("userPhone", PHONE2).expect(200);
+
+    const res = await request(app).post("/session/end").send({ userPhone: PHONE2 }).expect(200);
+    expect(res.body.ended).toBe(true);
+    expect(res.body.memoriesAdded).toBe(2);
+    expect(openai.chat.completions.create).toHaveBeenCalledOnce();
+  });
+});
+
+describe("GET /profile/:phone", () => {
+  it("returns profile shape for a known user", async () => {
+    const { app } = makeApp();
+    const PHONE = "+15550001003";
+    // seed via session/start (creates the user row)
+    await request(app).post("/session/start").send({ userPhone: PHONE, task: "study", name: "Alex" }).expect(200);
+
+    const res = await request(app)
+      .get(`/profile/${encodeURIComponent(PHONE)}`)
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      name: "Alex",
+      memories: expect.any(Array),
+      stats: expect.objectContaining({ total: expect.any(Number), checkIns: expect.any(Number), snitches: expect.any(Number) }),
+      recentVerdicts: expect.any(Array)
+    });
+  });
+
+  it("returns empty profile for an unknown user", async () => {
+    const { app } = makeApp();
+    const res = await request(app).get(`/profile/${encodeURIComponent("+15550009999")}`).expect(200);
+    expect(res.body.memories).toEqual([]);
+    expect(res.body.stats.total).toBe(0);
   });
 });

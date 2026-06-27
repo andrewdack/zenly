@@ -14,15 +14,21 @@ let BROADCAST_EXTENSION_BUNDLE_IDENTIFIER = "andrew.Zenly.ZenlyBroadcast"
 struct ContentView: View {
     @Environment(SessionStore.self) private var store
     @State private var showingSettings = false
+    @State private var showingProfile = false
 
     var body: some View {
         ZenlyShell {
-            if showingSettings {
+            if showingProfile {
+                ProfileScreen(onDone: { showingProfile = false })
+            } else if showingSettings {
                 SettingsScreen(onDone: { showingSettings = false })
             } else if let session = store.session {
                 RunningSessionView(session: session)
             } else {
-                HomeScreen(onEditSettings: { showingSettings = true })
+                HomeScreen(
+                    onEditSettings: { showingSettings = true },
+                    onShowProfile: { showingProfile = true }
+                )
             }
         }
         .onAppear {
@@ -30,6 +36,7 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.22), value: store.session != nil)
         .animation(.easeInOut(duration: 0.22), value: showingSettings)
+        .animation(.easeInOut(duration: 0.22), value: showingProfile)
     }
 }
 
@@ -84,6 +91,7 @@ private struct HomeScreen: View {
     @Environment(SessionStore.self) private var store
     @Environment(\.openURL) private var openURL
     let onEditSettings: () -> Void
+    let onShowProfile: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -111,7 +119,7 @@ private struct HomeScreen: View {
 
             Spacer()
 
-            SettingsSummary(onEdit: onEditSettings)
+            SettingsSummary(onEdit: onEditSettings, onProfile: onShowProfile)
 
             Text("choose your consequence")
                 .font(.redactionItalic(size: 16))
@@ -132,6 +140,7 @@ private struct HomeScreen: View {
 private struct SettingsSummary: View {
     @Environment(SessionStore.self) private var store
     let onEdit: () -> Void
+    let onProfile: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -139,12 +148,23 @@ private struct SettingsSummary: View {
             SummaryRow(key: "witness",
                        value: store.contactPhone.isEmpty ? "not set" : store.contactPhone)
 
-            Button(action: onEdit) {
-                Text("edit settings ›")
-                    .font(.redactionItalic(size: 17))
-                    .opacity(0.88)
+            HStack(spacing: 18) {
+                Button(action: onEdit) {
+                    Text("edit settings ›")
+                        .font(.redactionItalic(size: 17))
+                        .opacity(0.88)
+                }
+                .buttonStyle(.plain)
+
+                if !store.userPhone.isEmpty {
+                    Button(action: onProfile) {
+                        Text("profile ›")
+                            .font(.redactionItalic(size: 17))
+                            .opacity(0.88)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
             .padding(.top, 2)
         }
         .padding(16)
@@ -340,17 +360,38 @@ private struct RunningSessionView: View {
     }
 }
 
+/// Holds a weak reference to the RPSystemBroadcastPickerView so BroadcastStartCard
+/// can programmatically trigger the system broadcast picker sheet on session start.
+private final class BroadcastPickerHolder {
+    #if canImport(ReplayKit) && canImport(UIKit)
+    weak var view: RPSystemBroadcastPickerView?
+
+    func triggerPicker() {
+        guard let view else { return }
+        for sub in view.subviews {
+            if let btn = sub as? UIButton {
+                btn.sendActions(for: .touchUpInside)
+                return
+            }
+        }
+    }
+    #endif
+}
+
 private struct BroadcastStartCard: View {
+    @State private var holder = BroadcastPickerHolder()
+    @State private var didAutoTrigger = false
+
     var body: some View {
         HStack(spacing: 14) {
-            BroadcastPickerButton()
+            BroadcastPickerButton(holder: holder)
                 .frame(width: 46, height: 46)
                 .overlay(Rectangle().stroke(.white, lineWidth: 1.6))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("start screen capture")
+                Text("screen capture")
                     .font(.redaction(size: 22, weight: .bold))
-                Text("tap once after the session starts")
+                Text(didAutoTrigger ? "accept the system prompt" : "tap to start recording")
                     .font(.redactionItalic(size: 15))
                     .opacity(0.72)
             }
@@ -359,6 +400,15 @@ private struct BroadcastStartCard: View {
         }
         .padding(14)
         .overlay(Rectangle().stroke(.white.opacity(0.78), lineWidth: 1.4))
+        .task {
+            // Auto-present the broadcast picker ~0.8s after the session view appears,
+            // so the user gets prompted to start recording without finding the button.
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            #if canImport(ReplayKit) && canImport(UIKit)
+            holder.triggerPicker()
+            didAutoTrigger = true
+            #endif
+        }
     }
 }
 
@@ -368,13 +418,14 @@ private struct JudgeStatusCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             SummaryRow(key: "judge", value: store.judgeStatusText)
+            SummaryRow(key: "api", value: API_BASE_URL.host ?? "?")
             if !store.userPhone.isEmpty {
                 SummaryRow(key: "phone", value: store.userPhone)
             }
             if !store.lastJudgeReason.isEmpty {
                 Text(store.lastJudgeReason)
                     .font(.redactionItalic(size: 15))
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .opacity(0.72)
             }
         }
@@ -385,11 +436,14 @@ private struct JudgeStatusCard: View {
 
 #if canImport(ReplayKit) && canImport(UIKit)
 private struct BroadcastPickerButton: UIViewRepresentable {
+    let holder: BroadcastPickerHolder
+
     func makeUIView(context: Context) -> RPSystemBroadcastPickerView {
-        let picker = RPSystemBroadcastPickerView(frame: .zero)
+        let picker = RPSystemBroadcastPickerView(frame: CGRect(x: 0, y: 0, width: 46, height: 46))
         picker.preferredExtension = BROADCAST_EXTENSION_BUNDLE_IDENTIFIER
         picker.showsMicrophoneButton = false
         picker.tintColor = .white
+        holder.view = picker
         return picker
     }
 
@@ -401,6 +455,7 @@ private struct BroadcastPickerButton: UIViewRepresentable {
 }
 #else
 private struct BroadcastPickerButton: View {
+    let holder: BroadcastPickerHolder
     var body: some View {
         Text("◉")
             .font(.redaction(size: 28, weight: .bold))
@@ -594,6 +649,162 @@ private extension InterventionLevel {
     }
 }
 
+// MARK: - Profile screen
+
+private struct ProfileScreen: View {
+    @Environment(SessionStore.self) private var store
+    let onDone: () -> Void
+
+    @State private var profileData: ProfileResponse?
+    @State private var loadError = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("profile.")
+                .font(.redaction(size: 58, weight: .bold))
+                .tracking(-1.2)
+                .padding(.top, 8)
+
+            if let data = profileData {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ProfileStatsCard(data: data)
+                        if !data.memories.isEmpty {
+                            MemoriesCard(memories: data.memories)
+                        }
+                        if !data.recentVerdicts.isEmpty {
+                            RecentVerdictsCard(verdicts: data.recentVerdicts)
+                        }
+                    }
+                    .padding(.top, 20)
+                }
+            } else if loadError {
+                Text("couldn't load — no connection?")
+                    .font(.redactionItalic(size: 18))
+                    .opacity(0.72)
+                    .padding(.top, 24)
+            } else {
+                Text("loading...")
+                    .font(.redactionItalic(size: 18))
+                    .opacity(0.55)
+                    .padding(.top, 24)
+            }
+
+            Spacer()
+
+            Button(action: onDone) {
+                Text("back")
+                    .font(.redaction(size: 30, weight: .bold))
+                    .frame(maxWidth: .infinity, minHeight: 64)
+            }
+            .buttonStyle(ZenlyOutlineButtonStyle())
+            .padding(.bottom, 12)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task {
+            guard !store.userPhone.isEmpty else { return }
+            do {
+                profileData = try await ZenlyAPIClient().fetchProfile(userPhone: store.userPhone)
+            } catch {
+                loadError = true
+            }
+        }
+    }
+}
+
+private struct ProfileStatsCard: View {
+    let data: ProfileResponse
+
+    private var onTaskPct: Int {
+        let total = data.stats.total
+        guard total > 0 else { return 0 }
+        let good = (data.stats.byStatus["on_task"] ?? 0) + (data.stats.byStatus["ok"] ?? 0)
+        return Int(Double(good) / Double(total) * 100)
+    }
+
+    private var topOffense: String? {
+        data.stats.byCategory.max(by: { $0.value < $1.value })?.key
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SummaryRow(key: "sessions judged", value: "\(data.stats.total)")
+            SummaryRow(key: "on task", value: "\(onTaskPct)%")
+            if let offense = topOffense {
+                SummaryRow(key: "top weakness", value: offense)
+            }
+            SummaryRow(key: "check-ins", value: "\(data.stats.checkIns)")
+            SummaryRow(key: "snitches", value: "\(data.stats.snitches)")
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(Rectangle().stroke(.white.opacity(0.85), lineWidth: 1.6))
+    }
+}
+
+private struct MemoriesCard: View {
+    let memories: [MemoryItem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("what we know about you")
+                .font(.redactionItalic(size: 16))
+                .opacity(0.7)
+
+            ForEach(Array(memories.enumerated()), id: \.offset) { _, memory in
+                HStack(alignment: .top, spacing: 10) {
+                    Rectangle()
+                        .fill(.white.opacity(0.6))
+                        .frame(width: 5, height: 5)
+                        .padding(.top, 7)
+                    Text(memory.fact)
+                        .font(.redactionItalic(size: 17))
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(Rectangle().stroke(.white.opacity(0.6), lineWidth: 1.3))
+    }
+}
+
+private struct RecentVerdictsCard: View {
+    let verdicts: [RecentVerdict]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("recent checks")
+                .font(.redactionItalic(size: 16))
+                .opacity(0.7)
+
+            ForEach(Array(verdicts.prefix(5).enumerated()), id: \.offset) { _, v in
+                HStack(spacing: 10) {
+                    Rectangle()
+                        .fill(verdictColor(v.status))
+                        .frame(width: 8, height: 8)
+                    Text(v.reason)
+                        .font(.redactionItalic(size: 15))
+                        .lineLimit(1)
+                        .opacity(0.85)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(Rectangle().stroke(.white.opacity(0.6), lineWidth: 1.3))
+    }
+
+    private func verdictColor(_ status: String) -> Color {
+        switch status {
+        case "on_task", "ok": return .white
+        case "destructive":   return Color(red: 1, green: 0.35, blue: 0.35)
+        default:              return Color.zenlyFog
+        }
+    }
+}
+
 // MARK: - Previews
 
 #Preview("Home") {
@@ -618,5 +829,12 @@ private extension InterventionLevel {
     let store = SessionStore()
     store.contactPhone = "7034732803"
     store.start(task: "deep work")
+    return ContentView().environment(store)
+}
+
+#Preview("Profile") {
+    let store = SessionStore()
+    store.contactPhone = "7034732803"
+    store.userPhone = "+15555550000"
     return ContentView().environment(store)
 }
