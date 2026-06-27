@@ -13,7 +13,6 @@
 		2842C65C2FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2842C6522FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2842C65F2FEF2BD100AE86C6 /* ZenlyBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2842C6462FEF2BD100AE86C6 /* ZenlyBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2842C66F2FEF2BF000AE86C6 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2842C66E2FEF2BF000AE86C6 /* DeviceActivity.framework */; };
-		2842C6772FEF2BF000AE86C6 /* ZenlyActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2842C66D2FEF2BF000AE86C6 /* ZenlyActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -45,13 +44,6 @@
 			remoteGlobalIDString = 2842C6452FEF2BD100AE86C6;
 			remoteInfo = ZenlyBroadcast;
 		};
-		2842C6752FEF2BF000AE86C6 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 2842C6102FEF2A7D00AE86C6 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 2842C66C2FEF2BF000AE86C6;
-			remoteInfo = ZenlyActivity;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -61,7 +53,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				2842C6772FEF2BF000AE86C6 /* ZenlyActivity.appex in Embed Foundation Extensions */,
 				2842C65C2FEF2BD100AE86C6 /* ZenlyBroadcastSetupUI.appex in Embed Foundation Extensions */,
 				2842C65F2FEF2BD100AE86C6 /* ZenlyBroadcast.appex in Embed Foundation Extensions */,
 			);
@@ -262,7 +253,6 @@
 			dependencies = (
 				2842C65B2FEF2BD100AE86C6 /* PBXTargetDependency */,
 				2842C65E2FEF2BD100AE86C6 /* PBXTargetDependency */,
-				2842C6762FEF2BF000AE86C6 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				2842C61A2FEF2A7D00AE86C6 /* Zenly */,
@@ -552,11 +542,6 @@
 			isa = PBXTargetDependency;
 			target = 2842C6452FEF2BD100AE86C6 /* ZenlyBroadcast */;
 			targetProxy = 2842C65D2FEF2BD100AE86C6 /* PBXContainerItemProxy */;
-		};
-		2842C6762FEF2BF000AE86C6 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 2842C66C2FEF2BF000AE86C6 /* ZenlyActivity */;
-			targetProxy = 2842C6752FEF2BF000AE86C6 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
