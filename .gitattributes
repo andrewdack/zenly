@@ -1,0 +1,4 @@
+# Keep the repo language stats focused on the app source.
+# Tests and the generated OpenAPI spec aren't counted toward the language bar.
+api/tests/** linguist-vendored
+api/src/openapi.ts linguist-generated
