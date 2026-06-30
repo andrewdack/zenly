@@ -2,7 +2,7 @@
 
 Zenly is a distraction blocker that actually understands what you're trying to do. You text it what you're working on, it watches your screen, and if you start doomscrolling it texts you to knock it off. If you ignore that, it texts your friend and tells on you.
 
-We built this at a hackathon. It runs on an iPhone with a Node backend.
+Zenly runs on an iPhone with a Node backend.
 
 ## The idea
 
